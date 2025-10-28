@@ -9,7 +9,8 @@ import (
 )
 
 func InitUserToken() cache.Cacher[models.User] {
-	return global.NewCache[models.User](1*time.Minute, 1*time.Hour, "UserToken")
+	// 设置为0表示永不过期
+	return global.NewCache[models.User](0*time.Second, 1*time.Hour, "UserToken")
 }
 
 // func InitVerifyCodeCachePool() {

@@ -8,7 +8,8 @@ import (
 )
 
 func InitCUserToken() cache.Cacher[string] {
-	return global.NewCache[string](72*time.Hour, 48*time.Hour, "CUserToken")
+	// 设置为0表示永不过期
+	return global.NewCache[string](0*time.Second, 48*time.Hour, "CUserToken")
 }
 
 // func InitVerifyCodeCachePool() {
