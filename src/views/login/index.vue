@@ -8,6 +8,7 @@ import { router } from '@/router'
 import { t } from '@/locales'
 import { languageOptions } from '@/utils/defaultData'
 import type { Language } from '@/store/modules/app/helper'
+import { ss } from '@/utils/storage'
 
 // const userStore = useUserStore()
 const authStore = useAuthStore()
@@ -29,6 +30,9 @@ const loginPost = async () => {
   try {
     const res = await login<Login.LoginResponse>(form.value)
     if (res.code === 0) {
+      // 清除用户认证信息缓存，避免使用之前可能的公开模式缓存
+      ss.remove('USER_AUTH_INFO_CACHE')
+      
       authStore.setToken(res.data.token)
       authStore.setUserInfo(res.data)
 
