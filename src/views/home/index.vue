@@ -50,7 +50,7 @@ function handleRefreshData() {
     // 删除除用户登录信息外的所有缓存
     ss.remove(BOOKMARKS_CACHE_KEY)
     ss.remove(GROUP_LIST_CACHE_KEY)
-    
+
     // 直接清除所有localStorage中的图标列表缓存
     // 由于ss没有getAllKeys方法，我们直接使用原生localStorage API
     Object.keys(localStorage).forEach(key => {
@@ -58,14 +58,13 @@ function handleRefreshData() {
         ss.remove(key)
       }
     })
-    
+
     // 重新加载数据
     getList()
     loadBookmarkTree()
-    
+
     ms.success(t('common.refreshSuccess'))
   } catch (error) {
-    console.error('刷新数据失败:', error)
     ms.error(t('common.refreshFailed'))
   }
 }
@@ -409,7 +408,6 @@ async function getList() {
       filterItemsByNetworkMode()
     }
   } catch (error) {
-    console.error('获取分组数据失败:', error)
     // 出错时尝试从缓存获取
     const cachedData = ss.get(GROUP_LIST_CACHE_KEY)
     if (cachedData) {
@@ -458,7 +456,6 @@ async function updateItemIconGroupByNet(itemIconGroupIndex: number, itemIconGrou
       }
     }
   } catch (error) {
-    console.error(`获取分组 ${itemIconGroupId} 的图标数据失败:`, error)
     // 出错时尝试从缓存获取
     const cacheKey = `${ITEM_ICON_LIST_CACHE_KEY_PREFIX}${itemIconGroupId}`
     const cachedData = ss.get(cacheKey)
@@ -739,9 +736,9 @@ function handleAddItem(itemIconGroupId?: number) {
 			<NDrawerContent style=" min-height: 100vh;">
 				<template #header>
 					<div class="flex items-center justify-between w-full">
-						<span class="text-lg font-medium">书签列表</span>
+						<span class="text-lg font-medium">{{ t('bookmarkManager.bookmarkList') }}</span>
 						<NButton type="primary" size="small" @click="navigateToBookmarkManager">
-							书签管理
+							{{ t('bookmarkManager.management') }}
 						</NButton>
 					</div>
 				</template>
@@ -961,7 +958,7 @@ function handleAddItem(itemIconGroupId?: number) {
             <SvgIcon class="text-white font-xl" icon="majesticons-applications" />
           </template>
         </NButton>
-        
+
         <NButton color="#2a2a2a6b" :title="t('panelHome.refreshData')" @click="handleRefreshData">
           <template #icon>
             <SvgIcon class="text-white font-xl" icon="shuaxin" />

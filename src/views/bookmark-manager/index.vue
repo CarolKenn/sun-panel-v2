@@ -29,10 +29,10 @@
 				<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
 				</svg>
-				返回
+				{{ t('bookmarkManager.back') }}
 			</NButton>
 
-			<h1 class="text-xl font-bold text-gray-800 flex-1 text-center">书签管理</h1>
+			<h1 class="text-xl font-bold text-gray-800 flex-1 text-center">{{ t('bookmarkManager.management') }}</h1>
 
 			<NButton
 				@click="createNewBookmark"
@@ -44,7 +44,7 @@
 				<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
 				</svg>
-				新建
+				{{ t('bookmarkManager.create') }}
 			</NButton>
 
 			<NButton
@@ -58,7 +58,7 @@
 				<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
 				</svg>
-				导入书签
+				{{ t('bookmarkManager.importBookmarks') }}
 			</NButton>
 
 			<!-- 隐藏的文件输入框 -->
@@ -114,7 +114,7 @@
 				<div class="p-2 border-b flex items-center">
 					<n-input
 						v-model:value="searchQuery"
-						placeholder="搜索书签..."
+						:placeholder="t('bookmarkManager.searchPlaceholder')"
 						clearable
 						@input="handleSearch"
 					/>
@@ -124,7 +124,7 @@
 				<div class="flex-1 p-4 relative overflow-auto">
 					<div class="grid grid-cols-1 gap-2">
 						<div v-if="filteredBookmarks.length === 0" class="text-center py-8 text-gray-400">
-							暂无书签数据
+							{{ t('bookmarkManager.noData') }}
 						</div>
 
 						<div
@@ -147,42 +147,42 @@
 		<!-- 编辑书签对话框 -->
 		<div v-if="isEditDialogOpen" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
 			<div class="bg-white p-6 rounded-lg w-96">
-				<h3 class="text-xl font-bold mb-4">{{ isCreateMode ? '新建' : '修改' }}书签</h3>
+				<h3 class="text-xl font-bold mb-4">{{ isCreateMode ? t('bookmarkManager.createBookmark') : t('bookmarkManager.editBookmark') }}</h3>
 				<div v-if="isCreateMode" class="mb-4">
-					<label class="block mb-2">类型</label>
+					<label class="block mb-2">{{ t('bookmarkManager.type') }}</label>
 					<select
 						v-model="bookmarkType"
 						class="w-full px-3 py-2 border border-gray-300 rounded-md"
 					>
-						<option value="bookmark">书签</option>
-						<option value="folder">文件夹</option>
+						<option value="bookmark">{{ t('bookmarkManager.bookmark') }}</option>
+						<option value="folder">{{ t('bookmarkManager.folder') }}</option>
 					</select>
 				</div>
 				<div class="mb-4">
-					<label class="block mb-2">标题</label>
+					<label class="block mb-2">{{ t('bookmarkManager.title') }}</label>
 					<input
 						v-model="currentEditBookmark.title"
 						class="w-full px-3 py-2 border border-gray-300 rounded-md"
-						placeholder="标题"
+						placeholder="{{ t('bookmarkManager.title') }}"
 					/>
 				</div>
 				<div v-if="!isCreateMode || bookmarkType === 'bookmark'" class="mb-4">
-					<label class="block mb-2">URL</label>
+					<label class="block mb-2">{{ t('bookmarkManager.url') }}</label>
 					<input
 						v-model="currentEditBookmark.url"
 						class="w-full px-3 py-2 border border-gray-300 rounded-md"
-						placeholder="请输入书签URL"
+						placeholder="{{ t('bookmarkManager.enterUrl') }}"
 					/>
 				</div>
 				<div class="mb-4">
-					<label class="block mb-2">上级文件夹</label>
+					<label class="block mb-2">{{ t('bookmarkManager.parentFolder') }}</label>
 					<select v-model="currentEditBookmark.folderId" class="w-full px-3 py-2 border border-gray-300 rounded-md">
-						<option v-for="folder in allFolders" :key="folder.value" :value="folder.value">{{ folder.label }}</option>
+						<option v-for="folder in allFolders" :key="folder.value" :value="folder.value">{{ folder.value === '0' ? t('bookmarkManager.rootDirectory') : folder.label }}</option>
 					</select>
 				</div>
 				<div class="flex justify-end gap-2">
-					<button @click="closeEditDialog" class="px-4 py-2 border border-gray-300 rounded-md">取消</button>
-					<button @click="saveBookmarkChanges" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors shadow-md">确定</button>
+					<button @click="closeEditDialog" class="px-4 py-2 border border-gray-300 rounded-md">{{ t('bookmarkManager.cancel') }}</button>
+					<button @click="saveBookmarkChanges" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors shadow-md">{{ t('bookmarkManager.confirm') }}</button>
 				</div>
 			</div>
 		</div>
@@ -194,8 +194,8 @@
 			class="fixed bg-white text-gray-700 shadow-lg rounded-md py-1 z-50 w-40 context-menu border border-gray-200"
 			@contextmenu.prevent.stop
 		>
-			<div @click="handleEditBookmark" class="px-4 py-2 hover:bg-gray-100 cursor-pointer">编辑</div>
-			<div @click="handleDeleteBookmark" class="px-4 py-2 hover:bg-gray-100 cursor-pointer">删除</div>
+			<div @click="handleEditBookmark" class="px-4 py-2 hover:bg-gray-100 cursor-pointer">{{ t('bookmarkManager.edit') }}</div>
+			<div @click="handleDeleteBookmark" class="px-4 py-2 hover:bg-gray-100 cursor-pointer">{{ t('bookmarkManager.delete') }}</div>
 		</div>
 	</div>
 </template>
@@ -420,7 +420,7 @@ const treeRef = ref<InstanceType<typeof NTree> | null>(null);
 
 // 计算属性 - 所有文件夹（用于下拉选择）
 const allFolders = computed(() => {
-    const folders: { label: string; value: string }[] = [{ label: '根目录', value: '0' }];
+    const folders: { label: string; value: string }[] = [{ label: t('bookmarkManager.rootDirectory'), value: '0' }];
     const collectFolders = (nodes: any[]) => {
         for (const node of nodes) {
             if (!node.isLeaf) {
@@ -602,13 +602,13 @@ async function saveBookmarkChanges() {
 	try {
 		// 数据验证
 		if (!currentEditBookmark.value.title.trim()) {
-			ms.error('标题不能为空');
+			ms.error(t('bookmarkManager.titleRequired'));
 			return;
 		}
 
 		// 如果是创建书签类型，验证URL
 		if ((!isCreateMode.value || bookmarkType.value === 'bookmark') && !currentEditBookmark.value.url.trim()) {
-			ms.error('书签URL不能为空');
+			ms.error(t('bookmarkManager.urlRequired'));
 			return;
 		}
 
@@ -658,14 +658,14 @@ async function saveBookmarkChanges() {
 			const createResponse = await addBookmark(createData);
 
 			// 检查响应状态
-			if (createResponse && createResponse.code === 0) {
-				await refreshBookmarks();
-				ms.success('创建成功');
-				isEditDialogOpen.value = false;
-				isCreateMode.value = false;
-			} else {
-				ms.error(`创建失败: ${createResponse?.msg || '未知错误'}`);
-			}
+				if (createResponse && createResponse.code === 0) {
+					await refreshBookmarks();
+					ms.success(t('bookmarkManager.createSuccess'));
+					isEditDialogOpen.value = false;
+					isCreateMode.value = false;
+				} else {
+					ms.error(`${t('bookmarkManager.createFailed')} ${createResponse?.msg || t('bookmarkManager.unknownError')}`);
+				}
 		} else {
 			// 修改模式
 			// 使用update接口更新书签
@@ -684,15 +684,15 @@ async function saveBookmarkChanges() {
 				// 检查响应状态
 				if (updateResponse && updateResponse.code === 0) {
 					await refreshBookmarks();
-					ms.success('书签修改成功');
+					ms.success(t('bookmarkManager.updateSuccess'));
 					isEditDialogOpen.value = false;
 				} else {
-					ms.error(`书签修改失败: ${updateResponse?.msg || '未知错误'}`);
+					ms.error(`${t('bookmarkManager.updateFailed')} ${updateResponse?.msg || t('bookmarkManager.unknownError')}`);
 				}
 			}
 	} catch (error) {
 		console.error('保存书签失败', error);
-		ms.error(`书签修改失败: ${(error as Error).message || '网络错误'}`);
+		ms.error(`${t('bookmarkManager.updateFailed')} ${(error as Error).message || t('common.networkError')}`);
 	}
 }
 
@@ -700,29 +700,30 @@ async function saveBookmarkChanges() {
 async function deleteBookmark(bookmark: Bookmark) {
 	// 根据是否为文件夹显示不同的确认消息
 	const confirmMessage = bookmark.isFolder
-		? `确定要删除文件夹 "${bookmark.title}" 吗？删除后，该文件夹下的所有内容也将被删除。`
-		: `确定要删除书签 "${bookmark.title}" 吗？`;
+		? t('bookmarkManager.deleteFolderConfirm').replace('name', "【"+bookmark.title+"】")
+		 : t('bookmarkManager.deleteBookmarkConfirm').replace('name', "【"+bookmark.title+"】");
+		// : bookmark.title;
 
 	// 直接使用从apiMessage导入的dialog对象
 	dialog.warning({
-		title: '确认删除',
+		title: t('bookmarkManager.confirmDelete'),
 		content: confirmMessage,
-		positiveText: '确定',
-		negativeText: '取消',
+		positiveText: t('bookmarkManager.confirm'),
+		negativeText: t('bookmarkManager.cancel'),
 		onPositiveClick: async () => {
 			 try {
 				 const response = await deletes([Number(bookmark.id)]);
 				 if (response.code === 0) {
 					 // 清除书签缓存
 					 ss.remove(BOOKMARKS_CACHE_KEY)
-					 ms.success('删除成功');
+					 ms.success(t('bookmarkManager.deleteSuccess'));
 					 // 刷新书签列表
 					 await refreshBookmarks();
 				 } else {
-					 ms.error(`删除失败: ${response.msg}`);
+					 ms.error(`${t('bookmarkManager.deleteFailed')} ${response.msg}`);
 				 }
 			 } catch (error) {
-				 ms.error(`删除失败: ${(error as Error).message || '未知错误'}`);
+				 ms.error(`${t('bookmarkManager.deleteFailed')} ${(error as Error).message || t('bookmarkManager.unknownError')}`);
 			 }
 		 }
 	 });
@@ -772,7 +773,7 @@ function importCheck(fileName: string) {
 			// 直接将HTML内容传递给后端解析
 			importBookmarksToServerWithHTML(jsonData.value!);
 		} else {
-			ms.error('只支持HTML格式的书签文件导入');
+			ms.error(t('bookmarkManager.onlySupportHtml'));
 		}
 	} catch (error) {
 		ms.error(`${t('common.failed')}: ${(error as Error).message || t('common.unknownError')}`);
@@ -788,7 +789,7 @@ async function importBookmarksToServerWithHTML(htmlContent: string) {
 		// 直接将HTML内容传递给后端
 		const response = await addMultipleBookmarks({ htmlContent } as any);
 		if (response.code === 0) {
-			ms.success(`${t('common.success')}，成功导入 ${(response.data as any).count} 个书签`);
+			ms.success(t('bookmarkManager.importSuccess').replace('{count}', (response.data as any).count));
 			// 刷新书签列表
 			await refreshBookmarks();
 		} else {

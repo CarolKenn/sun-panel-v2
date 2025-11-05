@@ -14,7 +14,6 @@ import { ss } from '@/utils/storage'
 
 // 用户认证信息缓存键
 const USER_AUTH_INFO_CACHE_KEY = 'USER_AUTH_INFO_CACHE'
-const ITEM_ICON_LIST_CACHE_KEY_PREFIX = 'itemIconList_'
 const userStore = useUserStore()
 const authStore = useAuthStore()
 const appStore = useAppStore()
