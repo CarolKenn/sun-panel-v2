@@ -25,6 +25,10 @@ const form = ref<Login.LoginReqest>({
   password: '',
 })
 
+// 导入需要的API函数
+import { getList as getGroupList } from '@/api/panel/itemIconGroup'
+import { getList as getBookmarksList } from '@/api/panel/bookmark'
+
 const loginPost = async () => {
   loading.value = true
   try {
@@ -47,6 +51,39 @@ const loginPost = async () => {
       
       authStore.setToken(res.data.token)
       authStore.setUserInfo(res.data)
+      
+      // 登录成功后重新请求所有必要的接口
+      // 1. 重新请求分组列表
+      const groupListRes = await getGroupList()
+      if (groupListRes.code === 0) {
+        ss.set('groupListCache', groupListRes.data.list)
+        
+        // 2. 为每个分组重新请求图标数据
+        for (const group of groupListRes.data.list) {
+          if (group.id) {
+            try {
+              const importDynamic = new Function('modulePath', 'return import(modulePath)');
+              const { getListByGroupId } = await importDynamic('@/api/panel/itemIcon');
+              const iconListRes = await getListByGroupId(group.id);
+              if (iconListRes.code === 0) {
+                ss.set(`itemIconList_${group.id}`, iconListRes.data.list);
+              }
+            } catch (importError) {
+              console.error('导入getListByGroupId失败:', importError);
+            }
+          }
+        }
+      }
+      
+      // 3. 重新请求书签数据
+      const bookmarksRes = await getBookmarksList()
+      if (bookmarksRes.code === 0) {
+        // 简单处理书签数据，保存到缓存
+        ss.set('bookmarksTreeCache', bookmarksRes.data || []);
+      }
+      
+      // 更新本地用户信息
+      updateLocalUserInfo(res.data)
 
       setTimeout(() => {
         ms.success(`Hi ${res.data.name},${t('login.welcomeMessage')}`)
