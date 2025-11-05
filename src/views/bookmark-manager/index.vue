@@ -789,7 +789,8 @@ async function importBookmarksToServerWithHTML(htmlContent: string) {
 		// 直接将HTML内容传递给后端
 		const response = await addMultipleBookmarks({ htmlContent } as any);
 		if (response.code === 0) {
-			ms.success(t('bookmarkManager.importSuccess').replace('{count}', (response.data as any).count));
+			ms.success(t('bookmarkManager.importSuccess').replace('count', (response.data as any).count));
+			ss.remove(BOOKMARKS_CACHE_KEY)
 			// 刷新书签列表
 			await refreshBookmarks();
 		} else {

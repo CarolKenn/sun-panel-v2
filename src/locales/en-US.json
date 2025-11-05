@@ -71,7 +71,7 @@
     "deleteSuccess": "Deleted successfully",
     "deleteFailed": "Deletion failed:",
     "onlySupportHtml": "Only HTML format bookmark files are supported for import",
-    "importSuccess": "Successfully imported {count} bookmarks"
+    "importSuccess": "Successfully imported count bookmarks"
   },
   "apps": {
     "about": {

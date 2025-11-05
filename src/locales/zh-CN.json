@@ -71,7 +71,7 @@
     "deleteSuccess": "删除成功",
     "deleteFailed": "删除失败:",
     "onlySupportHtml": "只支持HTML格式的书签文件导入",
-    "importSuccess": "成功导入 {count} 个书签"
+    "importSuccess": "成功导入count个书签"
   },
   "apps": {
     "about": {
