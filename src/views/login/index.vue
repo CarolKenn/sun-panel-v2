@@ -30,8 +30,20 @@ const loginPost = async () => {
   try {
     const res = await login<Login.LoginResponse>(form.value)
     if (res.code === 0) {
-      // 清除用户认证信息缓存，避免使用之前可能的公开模式缓存
+      // 清除所有相关缓存，确保使用新的登录状态数据
       ss.remove('USER_AUTH_INFO_CACHE')
+      ss.remove('USER_CONFIG_CACHE')
+      ss.remove('GROUP_LIST_CACHE_KEY')
+      ss.remove('bookmarksTreeCache')
+      
+      // 清除所有localStorage中的相关缓存键
+      // 对于以特定前缀开头的键，我们需要使用localStorage API直接访问
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (key && (key.startsWith('moduleConfig_') || key.startsWith('ITEM_ICON_LIST_CACHE_'))) {
+          ss.remove(key)
+        }
+      }
       
       authStore.setToken(res.data.token)
       authStore.setUserInfo(res.data)
