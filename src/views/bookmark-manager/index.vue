@@ -95,6 +95,7 @@
 					block-line
 					@update:selected-keys="handleSelect"
 					:render-label="renderTreeLabel"
+					:render-expand-icon="renderExpandIcon"
 					ref="treeRef"
 				/>
 			</div>
@@ -201,7 +202,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted,h} from 'vue'
+import { ref, computed, onMounted, onUnmounted, h } from 'vue'
+import FolderOpenIcon from '@/assets/svg-icons/icon_folder_open.svg'
+// 不再直接导入SVG文件，使用内联方式
 import { NTree, NInput, NButton, useMessage } from 'naive-ui'
 import { useRouter } from 'vue-router'
 import { addMultiple as addMultipleBookmarks, add as addBookmark, getList as getBookmarksList, deletes, update as updateBookmark } from '@/api/panel/bookmark'
@@ -209,9 +212,21 @@ import { t } from '@/locales'
 import { dialog } from '@/utils/request/apiMessage'
 import { ss } from '@/utils/storage/local'
 
+
+// 组件顶部（import 之后）添加核心接口
+interface TreeOption {
+	key: string; // 节点唯一标识
+	label: string; // 显示文本
+	isLeaf: boolean; // 是否为叶子节点（书签）
+	isFolder: boolean; // 是否为文件夹（核心标识）
+	bookmark?: Omit<Bookmark, 'folderId'>; // 书签信息（非文件夹节点）
+	children: TreeOption[]; // 子节点（必须初始化为数组）
+	rawNode: any; // 后端原始数据
+	disabledExpand: boolean; // 关键：是否禁用折叠（控制图标显示）
+}
 // 缓存键名定义
-const BOOKMARKS_CACHE_KEY = 'bookmarksTreeCache' // 只包含文件夹的树结构缓存
-const BOOKMARKS_FULL_CACHE_KEY = 'bookmarksFullCache' // 完整书签数据缓存
+const  BOOKMARKS_FULL_CACHE_KEY= 'bookmarksTreeCache' // 只包含文件夹的树结构缓存
+const BOOKMARKS_CACHE_KEY = 'bookmarksFullCache' // 完整书签数据缓存
 
 const router = useRouter()
 const ms = useMessage()
@@ -399,7 +414,7 @@ function handleSelect(keys: (string | number)[]) {
 				// 如果是具体书签，设置selectedBookmarkId
 				selectedBookmarkId.value = key;
 				selectedFolder.value = ''; // 清空选中的文件夹
-			} 
+			}
 			// 如果是文件夹，设置selectedFolder
 			else if (selectedNode.isFolder || !selectedNode.isLeaf || !selectedNode.bookmark?.url) {
 				selectedFolder.value = key;
@@ -526,18 +541,51 @@ function handleTreeContextMenu({ node, event }: { node: any; event: MouseEvent }
 	}
 }
 
-// 渲染每个节点时，给 label 添加右键事件
-function renderTreeLabel({ option }: { option: any }) {
-	return h(
-		'span',
-		{
-			class: 'block px-1 py-0.5 rounded hover:bg-gray-100 cursor-default',
-			onContextmenu: (e: MouseEvent) => {
-				handleTreeContextMenu({ node: option, event: e })
-			},
-		},
-		option.label
-	)
+// 渲染标签函数，使用SVG图标
+// 自定义折叠图标渲染函数
+const renderExpandIcon = ({ option }: { option: TreeOption }) => {
+	// 现在我们已经通过设置isLeaf属性来控制折叠图标显示
+	// 这里保持简单，让Tree组件根据isLeaf属性自动决定
+	return undefined;
+};
+
+const renderTreeLabel = ({ option }: { option: any }) => {
+  // 检查是否是文件夹节点
+  const isFolder = option.isFolder || (!option.isLeaf && !option.bookmark?.url);
+
+  // 尝试从不同的可能属性获取标题，增加健壮性
+  const nodeTitle = option.title || option.label || option.name || '未命名';
+
+  // 创建内容数组
+  const content = [];
+
+  // 如果是文件夹节点，添加SVG图标
+  if (isFolder) {
+    content.push(
+      h('img', {
+        src: FolderOpenIcon,
+        class: 'w-5 h-5 inline-block mr-1',
+        alt: 'folder icon'
+      })
+    );
+
+    // 显示文件夹标题
+    content.push(nodeTitle);
+  } else {
+    // 非文件夹节点只显示标题
+    content.push(nodeTitle);
+  }
+
+  return h(
+    'div',
+    {
+      class: 'px-1 py-0.5 rounded hover:bg-gray-100 cursor-default flex items-center',
+      onContextmenu: (e: MouseEvent) => {
+        handleTreeContextMenu({ node: option, event: e })
+      },
+    },
+    content
+  );
 }
 
 function handleGlobalClick(event: MouseEvent) {
@@ -633,9 +681,6 @@ async function saveBookmarkChanges() {
 				currentEditBookmark.value.url = url;
 			}
 		}
-
-		// 清除首页的书签缓存，确保下次访问首页时重新获取最新数据
-		ss.remove(BOOKMARKS_CACHE_KEY)
 
 		// 根据模式决定调用哪个接口
 		if (isCreateMode.value) {
@@ -818,33 +863,36 @@ async function importBookmarksToServerWithHTML(htmlContent: string) {
 
 
 // 过滤函数：从完整树结构中只保留文件夹
-function filterFoldersOnly(nodes: any[]): any[] {
+function filterFoldersOnly(nodes: TreeOption[]): TreeOption[] {
 	return nodes.map(node => {
-		// 克隆节点，移除bookmark属性
-		const folderNode = {
+		// 克隆节点时，确保保留 disabledExpand（...node 会自动浅拷贝）
+		const folderNode: TreeOption = {
 			...node,
-			isLeaf: false, // 确保文件夹不是叶子节点
-			bookmark: undefined // 移除书签信息
+			bookmark: undefined,
+			children: []
 		};
-		
-		// 递归过滤子节点
-		if (node.children && node.children.length > 0) {
-			// 只保留子节点中的文件夹
-			const folderChildren = node.children.filter((child: any) => 
-				child.isFolder || (child.rawNode && child.rawNode.isFolder === 1)
-			);
+
+		if (Array.isArray(node.children) && node.children.length > 0) {
+			const folderChildren = node.children.filter(child => child.isFolder);
 			if (folderChildren.length > 0) {
 				folderNode.children = filterFoldersOnly(folderChildren);
+				// 子节点不为空 → 启用折叠，设置isLeaf为false
+				folderNode.isLeaf = false;
+				folderNode.disabledExpand = false;
 			} else {
 				folderNode.children = [];
+				// 子节点为空 → 禁用折叠，设置isLeaf为true
+				folderNode.isLeaf = true;
+				folderNode.disabledExpand = true;
 			}
+		} else {
+			// 没有子节点 → 设置isLeaf为true
+			folderNode.isLeaf = true;
+			folderNode.disabledExpand = true;
 		}
-		
+
 		return folderNode;
-	}).filter(node => 
-		// 只保留文件夹节点
-		node.isFolder || (node.rawNode && node.rawNode.isFolder === 1)
-	);
+	}).filter(node => node.isFolder);
 }
 
 // 刷新书签列表
@@ -853,16 +901,16 @@ async function refreshBookmarks() {
 		// 1. 首先尝试从缓存读取完整数据和文件夹树结构
 		const cachedFullData = ss.get(BOOKMARKS_FULL_CACHE_KEY);
 		const cachedFolderTree = ss.get(BOOKMARKS_CACHE_KEY);
-		
+
 		if (cachedFullData && cachedFolderTree) {
 			// 使用闭包存储完整数据用于右侧列表
 			const fullData = cachedFullData;
 			// 直接使用过滤后的文件夹树结构
 			bookmarkTree.value = cachedFolderTree;
-			
+
 			// 设置默认展开第一级节点
 			defaultExpandedKeys.value = bookmarkTree.value.map(node => node.key);
-			
+
 			// 重写allBookmarks计算属性，使其从完整数据获取
 			Object.defineProperty(globalThis, '__bookmarksFullData', { value: fullData, configurable: true });
 			return;
@@ -897,14 +945,17 @@ async function refreshBookmarks() {
 			// 过滤出只包含文件夹的树结构
 		const folderTreeData = filterFoldersOnly(fullTreeData);
 		bookmarkTree.value = folderTreeData;
-		
-		// 设置默认展开第一级节点
-		defaultExpandedKeys.value = bookmarkTree.value.map(node => node.key);
+
+			// 设置默认展开第一级节点
+			defaultExpandedKeys.value = bookmarkTree.value.map(node => node.key);
 
 			// 4. 分别缓存完整数据和文件夹树结构
 			ss.set(BOOKMARKS_FULL_CACHE_KEY, fullTreeData);
 			ss.set(BOOKMARKS_CACHE_KEY, folderTreeData);
-			
+
+		// 在组件渲染后处理空文件夹状态
+		// 注意：这里不修改缓存数据，只处理视图显示
+
 			// 存储完整数据用于右侧列表
 			Object.defineProperty(globalThis, '__bookmarksFullData', { value: fullTreeData, configurable: true });
 		}
@@ -914,101 +965,128 @@ async function refreshBookmarks() {
 }
 
 // 将服务器返回的树形结构转换为前端组件需要的格式
-function convertServerTreeToFrontendTree(serverTree: any[]): any[] {
+function convertServerTreeToFrontendTree(serverTree: any[]): TreeOption[] {
+	// 为每个节点创建一个映射来存储父ID信息
+	const folderIdMap = new Map<string, string | null>();
+	
 	const result = serverTree.map(node => {
-		// 处理bookmark对象
 		let bookmarkObj = undefined;
 		if (node.isFolder !== 1 && node.url) {
-			// 确保folderId是字符串类型，以便与selectedFolder.value进行比较
 			const folderId = node.ParentUrl !== undefined ? String(node.ParentUrl) : null;
-			bookmarkObj = {
-				id: node.id,
-				title: node.title,
-				url: node.url,
-				folderId: folderId
-			};
+			// 存储在单独的映射中而不是节点对象上
+			folderIdMap.set(String(node.id), folderId);
+			bookmarkObj = { id: node.id, title: node.title, url: node.url };
 		}
 
-		const frontendNode = {
-		key: node.id,
-		label: node.title,
-		isLeaf: node.isFolder !== 1,
-		isFolder: node.isFolder === 1, // 明确标记是否为文件夹
-		bookmark: bookmarkObj,
-		children: [] as any[], // 明确指定类型为 any[]
-		// 添加原始节点信息用于调试
-		rawNode: node
-	};
+		// 计算是否有子节点
+		const hasChildren = Array.isArray(node.children) && node.children.length > 0;
 
-		// 递归处理子节点
-		if (node.children && node.children.length > 0) {
-			frontendNode.children = convertServerTreeToFrontendTree(node.children);
-		}
+		const frontendNode: TreeOption = {
+			key: String(node.id),
+			label: node.title || '未命名',
+			// 关键修改：对于文件夹节点，如果没有子节点则设置isLeaf为true
+			isLeaf: node.isFolder !== 1 || !hasChildren,
+			isFolder: node.isFolder === 1,
+			bookmark: bookmarkObj,
+			children: hasChildren ? convertServerTreeToFrontendTree(node.children) : [],
+			rawNode: node,
+			disabledExpand: !hasChildren
+		};
 
 		return frontendNode;
 	});
+	
+	// 在处理完所有节点后，处理父子关系
+	// 注意：这里我们只需要返回转换后的节点，父子关系会在外部处理
 	return result;
 }
 
-// 构建书签树
-function buildBookmarkTree(bookmarks: any[]): any[] {
-	// 创建一个Map用于快速查找文件夹
-	const folderMap = new Map<string, any>();
-	// 所有节点列表
-	const allNodes: any[] = [];
+function buildBookmarkTree(bookmarks: any[]): TreeOption[] {
+	const folderMap = new Map<string, TreeOption>();
+	const allNodes: TreeOption[] = [];
+	// 使用单独的映射来存储folderId信息
+	const folderIdMap = new Map<string, string>();
 
-	// 第一步：分离文件夹和书签，创建所有节点
+	// 第一步：创建所有节点
 	for (const bookmark of bookmarks) {
-		// 判断是否是文件夹
 		const isFolder = bookmark.isFolder === 1;
-
-		// 创建节点对象
-		const node: any = {
-			key: String(bookmark.id || bookmark.Key || bookmark.key),
-			title: bookmark.title || bookmark.Title || '未命名',
-			isLeaf: !isFolder, // 文件夹不是叶子节点
-			isFolder: isFolder, // 明确标记是否为文件夹
-			rawNode: bookmark, // 保留原始节点信息
-			children: []
+		const nodeKey = String(bookmark.id || bookmark.Key || '0');
+		const node: TreeOption = {
+			key: nodeKey,
+			label: bookmark.title || '未命名',
+			isLeaf: !isFolder,
+			isFolder: isFolder,
+			rawNode: bookmark,
+			children: [],
+			disabledExpand: true // 初始设为true，后续根据实际情况调整
 		};
 
-		// 如果是文件夹，添加到folderMap并标记
 		if (isFolder) {
-			node.bookmark = undefined; // 文件夹不包含书签信息
+			node.bookmark = undefined;
 			folderMap.set(node.key, node);
 		} else {
-			// 如果是书签，添加bookmark属性
-			node.bookmark = bookmark;
+			// 创建不包含folderId的bookmark对象
+			const { folderId, ...bookmarkWithoutFolderId } = bookmark;
+			node.bookmark = bookmarkWithoutFolderId;
+			// 将folderId存储在单独的映射中
+			if (folderId) {
+				folderIdMap.set(nodeKey, String(folderId));
+			}
 		}
 
 		allNodes.push(node);
 	}
 
 	// 第二步：构建树形结构
-	const rootNodes: any[] = [];
+	const rootNodes: TreeOption[] = [];
 
+	// 构建父子关系
 	for (const node of allNodes) {
-		const parentId = String(node.rawNode.ParentUrl || node.rawNode.parentId || node.rawNode.parent_key || '0');
+		if (node.isFolder) continue;
 
-		if (parentId === '0' || parentId === 'undefined' || parentId === 'null') {
-			// 根节点
-			rootNodes.push(node);
+		// 获取父文件夹ID - 从单独的映射中获取
+		const parentId = folderIdMap.get(node.key) || '0';
+		const parentFolder = folderMap.get(String(parentId));
+
+		if (parentFolder) {
+			// 添加到父文件夹的子节点列表
+			parentFolder.children.push(node);
+			// 更新父文件夹的disabledExpand属性
+			parentFolder.disabledExpand = false;
 		} else {
-			// 查找父文件夹
-			const parentFolder = folderMap.get(parentId);
+			// 如果没有父文件夹，添加到根节点
+			rootNodes.push(node);
+		}
+	}
 
-			if (parentFolder) {
-				parentFolder.children.push(node);
-				parentFolder.isLeaf = false; // 确保父文件夹不是叶子节点
-			} else {
-				// 如果找不到父文件夹，添加到根节点
-				rootNodes.push(node);
-			}
+	// 添加所有根文件夹到根节点列表
+	for (const node of folderMap.values()) {
+		// 检查是否是根文件夹（没有被添加为其他节点的子节点）
+		const isRootFolder = !Array.from(folderMap.values()).some(parent =>
+			parent.children.some(child => child.key === node.key)
+		);
+
+		if (isRootFolder) {
+			// 更新根文件夹的disabledExpand属性
+			node.disabledExpand = node.children.length === 0;
+			rootNodes.push(node);
+		}
+	}
+
+	// 第三步：更新文件夹节点的isLeaf和disabledExpand属性
+	for (const node of allNodes) {
+		if (node.isFolder) {
+			// 关键修改：空文件夹设置isLeaf为true，但保持isFolder为true
+			// 这样Tree组件不会显示折叠图标，但renderTreeLabel仍会将其识别为文件夹
+			const hasChildren = Array.isArray(node.children) && node.children.length > 0;
+			node.isLeaf = !hasChildren;
+			node.disabledExpand = !hasChildren;
 		}
 	}
 
 	return rootNodes;
 }
+
 const handleResize = () => {
 	isMobile.value = window.innerWidth < 768
 	// 移动端默认隐藏左栏
@@ -1016,9 +1094,8 @@ const handleResize = () => {
 }
 // 组件挂载时加载书签
 onMounted(async () => {
-	// 首次加载时清除所有相关缓存，确保使用新的缓存逻辑
-	ss.remove(BOOKMARKS_CACHE_KEY);
-	ss.remove(BOOKMARKS_FULL_CACHE_KEY);
+	ss.remove(BOOKMARKS_CACHE_KEY)
+	ss.remove(BOOKMARKS_FULL_CACHE_KEY)
 	await refreshBookmarks();
 	// 添加全局事件监听器
 	document.addEventListener('mousemove', handleMouseMove);
@@ -1051,6 +1128,22 @@ position: fixed !important;
 z-index: 99999 !important;
 background-color: white;
 }
+
+/* 文件夹图标样式 */
+.folder-icon {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+
+.icon-folder-open {
+    /* 使用内联SVG作为背景，避免外部资源依赖 - 使用标准文件夹图标 */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%234285f4' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'/%3E%3C/svg%3E");
+}
+
 /* 移动端左栏滑动过渡 */
 .left-panel-transition {
 	transition: transform 0.3s ease-in-out;
@@ -1063,6 +1156,4 @@ background-color: white;
 	box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 	transition: width 0.3s ease-in-out, transform 0.3s ease-in-out;
 }
-
-
 </style>
