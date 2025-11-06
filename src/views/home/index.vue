@@ -46,7 +46,7 @@ const dropdownShow = ref(false)
 const currentRightSelectItem = ref<Panel.ItemInfo | null>(null)
 const currentAddItenIconGroupId = ref<number | undefined>()
 // 刷新函数 - 删除缓存并重新加载数据
-function handleRefreshData() {
+async function handleRefreshData() {
   try {
     // 删除除用户登录信息外的所有缓存
     ss.remove(BOOKMARKS_CACHE_KEY)
@@ -62,10 +62,12 @@ function handleRefreshData() {
 
     // 重新加载数据
     getList()
-    loadBookmarkTree()
+    // 调用loadBookmarkTree并传入true参数以强制刷新
+    await loadBookmarkTree(true)
 
     ms.success(t('common.refreshSuccess'))
   } catch (error) {
+    console.error('刷新数据失败:', error)
     ms.error(t('common.refreshFailed'))
   }
 }
@@ -109,16 +111,24 @@ const GROUP_LIST_CACHE_KEY = 'groupListCache'
 const ITEM_ICON_LIST_CACHE_KEY_PREFIX = 'itemIconList_'
 
 // 获取书签数据并转换为前端需要的格式
-async function loadBookmarkTree() {
+async function loadBookmarkTree(forceRefresh = false) {
   try {
-    // 1. 首先尝试从缓存读取数据
-    const cachedData = ss.get(BOOKMARKS_CACHE_KEY)
-    if (cachedData) {
-      treeData.value = cachedData
-      return
+    // 如果不是强制刷新且缓存存在，则使用缓存
+    if (!forceRefresh) {
+      const cachedData = ss.get(BOOKMARKS_CACHE_KEY)
+      if (cachedData) {
+        console.log('使用缓存的书签数据')
+        treeData.value = cachedData
+        return
+      }
+    } else {
+      // 强制刷新时清除缓存
+      ss.remove(BOOKMARKS_CACHE_KEY)
+      console.log('强制刷新，清除缓存')
     }
 
-    // 2. 缓存中没有数据，请求接口获取数据
+    // 请求接口获取数据
+    console.log('从服务器获取书签数据')
     const response = await getBookmarksList()
     if (response.code === 0) {
       // 检查数据结构
@@ -128,35 +138,47 @@ async function loadBookmarkTree() {
       // 检查是否已经是树形结构（直接包含children字段）
       if (Array.isArray(data) && data.length > 0 && 'children' in data[0]) {
         // 已经是树形结构，转换为前端需要的格式
+        console.log('处理已有的树形结构数据')
         treeDataResult = convertServerTreeToFrontendTree(data)
       } else if (data.list && Array.isArray(data.list)) {
         // 后端返回的是带list字段的结构
         const serverBookmarks = data.list
         if (serverBookmarks.length > 0 && 'children' in serverBookmarks[0]) {
           // list字段中已经是树形结构
+          console.log('处理list字段中的树形结构数据')
           treeDataResult = convertServerTreeToFrontendTree(serverBookmarks)
         } else {
           // 构建树形结构
+          console.log('从列表构建树形结构')
           treeDataResult = buildBookmarkTree(serverBookmarks)
         }
       } else {
         // 作为列表数据构建树形结构
+        console.log('从基础数据构建树形结构')
         treeDataResult = buildBookmarkTree(Array.isArray(data) ? data : [])
       }
 
       // 更新treeData
       treeData.value = treeDataResult
+      console.log('书签数据加载完成，共', treeDataResult.length, '个根节点')
 
-      // 3. 将数据永久保存到缓存中
+      // 将数据保存到缓存中
       ss.set(BOOKMARKS_CACHE_KEY, treeDataResult)
     }
   } catch (error) {
     console.error('获取书签数据失败:', error)
+    // 出错时尝试使用缓存
+    const cachedData = ss.get(BOOKMARKS_CACHE_KEY)
+    if (cachedData) {
+      console.log('加载失败，使用缓存数据作为备份')
+      treeData.value = cachedData
+    }
   }
 }
 
 // 将服务器返回的树形结构转换为前端组件需要的格式
 function convertServerTreeToFrontendTree(serverTree: any[]): any[] {
+  // 直接映射，不做任何排序
   const result = serverTree.map(node => {
     // 处理bookmark对象
     let bookmarkObj = undefined
@@ -172,10 +194,10 @@ function convertServerTreeToFrontendTree(serverTree: any[]): any[] {
     }
 
     const frontendNode = {
-      key: node.id,
-      label: node.title,
-      isLeaf: node.isFolder !== 1,
-      bookmark: bookmarkObj
+        key: node.id,
+        label: node.title,
+        isLeaf: node.isFolder !== 1,
+        bookmark: bookmarkObj
     }
 
     // 递归处理子节点
@@ -185,6 +207,7 @@ function convertServerTreeToFrontendTree(serverTree: any[]): any[] {
 
     return frontendNode
   })
+
   return result
 }
 
@@ -271,6 +294,7 @@ function buildBookmarkTree(bookmarks: any[]): any[] {
           folderId: folderId
         }
       }
+      // 直接添加，不做排序，完全按照后端返回顺序
       targetFolder.children.push(bookmarkNode)
     }
   })
@@ -629,7 +653,7 @@ function getDropdownMenuOptions() {
   return dropdownMenuOptions
 }
 
-onMounted(() => {
+onMounted(async () => {
   // 更新用户信息
   updateLocalUserInfo()
   getList()
@@ -641,8 +665,9 @@ onMounted(() => {
   if (panelState.panelConfig.logoText)
     setTitle(panelState.panelConfig.logoText)
 
-  // 加载书签数据
-  loadBookmarkTree()
+  // 加载书签数据，使用forceRefresh=true确保获取最新排序
+  await loadBookmarkTree(true)
+  console.log('组件挂载完成，书签树数据已加载')
 })
 
 // 前端搜索过滤

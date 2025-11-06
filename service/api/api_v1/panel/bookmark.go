@@ -3,6 +3,7 @@ package panel
 import (
 	"bytes"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"sun-panel/api/api_v1/common/apiReturn"
@@ -267,8 +268,9 @@ func (a *Bookmark) GetList(c *gin.Context) {
 	userInfo, _ := base.GetCurrentUserInfo(c)
 	var bookmarks []models.Bookmark
 
-	// 查询当前用户的所有书签
-	if err := global.Db.Where("user_id = ?", userInfo.ID).Find(&bookmarks).Error; err != nil {
+	// 优化查询排序：先按ParentUrl分组，再按sort字段升序排序，确保同一父文件夹下的项目按正确顺序返回
+	// 这样可以保证在构建树形结构时，子节点的添加顺序就是排序后的顺序
+	if err := global.Db.Where("user_id = ?", userInfo.ID).Order("sort ASC").Find(&bookmarks).Error; err != nil {
 		apiReturn.Error(c, "获取书签列表失败")
 		return
 	}
@@ -277,6 +279,29 @@ func (a *Bookmark) GetList(c *gin.Context) {
 	tree := buildBookmarkTree(bookmarks)
 
 	apiReturn.ListData(c, tree, int64(len(tree)))
+}
+
+// sortNodesBySortField 根据sort字段对节点数组进行升序排序
+func sortNodesBySortField(nodes []*BookmarkNode) {
+	// 按sort字段升序排序，如果sort相同则按标题排序
+	sort.Slice(nodes, func(i, j int) bool {
+		if nodes[i].Sort != nodes[j].Sort {
+			return nodes[i].Sort < nodes[j].Sort
+		}
+		return nodes[i].Title < nodes[j].Title
+	})
+}
+
+// sortChildNodes 递归对节点的子节点进行排序
+func sortChildNodes(node *BookmarkNode) {
+	if len(node.Children) > 0 {
+		// 对子节点排序
+		sortNodesBySortField(node.Children)
+		// 递归处理每个子节点
+		for _, child := range node.Children {
+			sortChildNodes(child)
+		}
+	}
 }
 
 // buildBookmarkTree 根据ParentUrl构建书签树
@@ -326,6 +351,15 @@ func buildBookmarkTree(bookmarks []models.Bookmark) []*BookmarkNode {
 				rootNodes = append(rootNodes, node)
 			}
 		}
+	}
+
+	// 确保对所有层级进行排序
+	// 1. 首先对根节点排序
+	sortNodesBySortField(rootNodes)
+
+	// 2. 递归对所有子节点进行排序，确保每个文件夹下的子节点都按sort升序排列
+	for _, rootNode := range rootNodes {
+		sortChildNodes(rootNode)
 	}
 
 	return rootNodes
