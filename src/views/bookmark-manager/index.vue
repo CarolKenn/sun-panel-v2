@@ -557,10 +557,10 @@ const allFolders = computed(() => {
     // 优先从fullData收集，确保获取所有文件夹
     const dataSource = fullData.value.length > 0 ? fullData.value : bookmarkTree.value;
     collectFolders(dataSource);
-    
+
     // 去重，确保没有重复的文件夹
     const uniqueFolders = Array.from(new Map(folders.map(folder => [folder.value, folder])).values());
-    
+
     return uniqueFolders;
 });
 
@@ -829,53 +829,67 @@ async function handleDrop(event: DragEvent, targetItem: any) {
 
 	// 获取当前文件夹中的所有项目
 	// 注意：这里需要从服务器获取的数据中查找，而不是仅从前端状态
-	const currentFolderItems = allItems.value.filter(item => 
+	const currentFolderItems = allItems.value.filter(item =>
 		String(item.folderId || '0') === draggedFolderId
 	);
-	
+
 	// 找到拖拽项和目标项在当前文件夹中的索引
 	const draggedIndex = currentFolderItems.findIndex(item => String(item.id) === String(draggedItemData.id));
 	const targetIndex = currentFolderItems.findIndex(item => String(item.id) === String(targetItem.id));
-	
+
 	console.log('项目索引:', { draggedIndex, targetIndex, folderItemsCount: currentFolderItems.length });
-	
+
 	if (draggedIndex !== -1 && targetIndex !== -1) {
 		// 实现交换排序的逻辑
-		// 方案：交换两个项目的排序值
-		const draggedUpdateData = {
-					id: Number(draggedItemData.id),
-					title: draggedItemData.title,
-					url: draggedItemData.isFolder ? draggedItemData.title : (draggedItemData.url || ''),
-					parentUrl: draggedFolderId,
-					sort: targetIndex + 1, // 使用目标项的位置+1作为排序值
-					lanUrl: draggedItemData.lanUrl || '',
-					openMethod: draggedItemData.openMethod || 0,
-					icon: draggedItemData.icon || null
-				};
+				// 方案：交换两个项目的排序值
+				// 如果两个位置相同，需要特殊处理以确保排序生效
+				let draggedSort = targetIndex + 1;
+				let targetSort = draggedIndex + 1;
 				
-				const targetUpdateData = {
-					id: Number(targetItem.id),
-					title: targetItem.title,
-					url: targetItem.isFolder ? targetItem.title : (targetItem.url || ''),
-					parentUrl: targetFolderId,
-					sort: draggedIndex + 1, // 使用拖拽项的位置+1作为排序值
-					lanUrl: targetItem.lanUrl || '',
-					openMethod: targetItem.openMethod || 0,
-					icon: targetItem.icon || null
+				// 如果计算出的排序值相同，进行特殊处理
+				if (draggedSort === targetSort) {
+					// 给其中一个值加1，确保排序值不同
+					draggedSort += 1;
+				}
+				
+				// 从allFolders中查找当前文件夹的标题
+				const currentFolder = allFolders.value.find(folder => folder.value === draggedFolderId);
+				const parentUrlValue = currentFolder ? currentFolder.label : '0';
+				
+				const draggedUpdateData = {
+						id: Number(draggedItemData.id),
+						title: draggedItemData.title,
+						url: draggedItemData.isFolder ? draggedItemData.title : (draggedItemData.url || ''),
+						parentUrl: parentUrlValue,
+					sort: draggedSort,
+						lanUrl: draggedItemData.lanUrl || '',
+						openMethod: draggedItemData.openMethod || 0,
+						icon: draggedItemData.icon || null
 				};
-		
+
+				const targetUpdateData = {
+						id: Number(targetItem.id),
+						title: targetItem.title,
+						url: targetItem.isFolder ? targetItem.title : (targetItem.url || ''),
+						parentUrl: parentUrlValue,
+					sort: targetSort,
+						lanUrl: targetItem.lanUrl || '',
+						openMethod: targetItem.openMethod || 0,
+						icon: targetItem.icon || null
+				};
+
 		console.log('交换排序数据 - 拖拽项:', draggedUpdateData);
 		console.log('交换排序数据 - 目标项:', targetUpdateData);
-		
+
 		try {
 			// 先更新拖拽项
 			const draggedResponse = await update(draggedUpdateData);
 			console.log('拖拽项更新响应:', draggedResponse);
-			
+
 			// 再更新目标项
 			const targetResponse = await update(targetUpdateData);
 			console.log('目标项更新响应:', targetResponse);
-			
+
 			// 清除缓存并刷新
 			ss.remove(BOOKMARKS_FULL_CACHE_KEY);
 			ss.remove(BOOKMARKS_CACHE_KEY);
@@ -890,7 +904,7 @@ async function handleDrop(event: DragEvent, targetItem: any) {
 		console.log('在当前文件夹中找不到拖拽项或目标项');
 		ms.warning('排序更新失败：找不到相关项目');
 	}
-	
+
 	// 重置拖拽状态
 	draggedItem.value = null;
 	console.log('=== handleDrop 结束 ===');
@@ -973,11 +987,20 @@ async function saveBookmarkChanges() {
 		// 根据模式决定调用哪个接口
 		if (isCreateMode.value) {
 			// 创建新模式
+			// 根据folderId查找对应的文件夹标题作为parentUrl
+			let parentUrl = '0';
+			const selectedFolderId = currentEditBookmark.value.folderId ? currentEditBookmark.value.folderId.toString() : '0';
+			if (selectedFolderId !== '0') {
+				const selectedFolder = allFolders.value.find(folder => folder.value === selectedFolderId);
+				if (selectedFolder) {
+					parentUrl = selectedFolder.label; // 使用文件夹的title作为parentUrl
+				}
+			}
 			const createData = {
 				title: currentEditBookmark.value.title,
 				url: '',
-				// 注意后端JSON标签是小写的parentUrl
-				parentUrl: currentEditBookmark.value.folderId ? currentEditBookmark.value.folderId.toString() : '0',
+				// 使用文件夹标题作为parentUrl
+				parentUrl: parentUrl,
 				sort: 9999,
 				lanUrl: '',
 				icon: null,
@@ -1005,6 +1028,8 @@ async function saveBookmarkChanges() {
 
 			// 检查响应状态
 				if (createResponse && createResponse.code === 0) {
+					ss.remove(BOOKMARKS_FULL_CACHE_KEY);
+					ss.remove(BOOKMARKS_CACHE_KEY);
 					await refreshBookmarks();
 					ms.success(t('bookmarkManager.createSuccess'));
 					isEditDialogOpen.value = false;
@@ -1016,10 +1041,19 @@ async function saveBookmarkChanges() {
 			// 修改模式
 			// 根据是否为文件夹构建不同的更新数据
 			const isFolderItem = currentBookmark.value?.isFolder;
+			// 根据folderId查找对应的文件夹标题作为parentUrl
+			let parentUrl = '0';
+			const selectedFolderId = currentEditBookmark.value.folderId ? currentEditBookmark.value.folderId.toString() : '0';
+			if (selectedFolderId !== '0') {
+				const selectedFolder = allFolders.value.find(folder => folder.value === selectedFolderId);
+				if (selectedFolder) {
+					parentUrl = selectedFolder.label; // 使用文件夹的title作为parentUrl
+				}
+			}
 			const updateData = {
 				id: Number(currentEditBookmark.value.id),
 				title: currentEditBookmark.value.title,
-				parentUrl: currentEditBookmark.value.folderId ? currentEditBookmark.value.folderId.toString() : '0',
+				parentUrl: parentUrl,
 				sort: 9999,
 				lanUrl: '',
 				icon: null,
@@ -1163,8 +1197,12 @@ function importCheck(fileName: string) {
 async function importBookmarksToServerWithHTML(htmlContent: string) {
 	uploadLoading.value = true;
 	try {
-		// 直接将HTML内容传递给后端
-		const response = await addMultipleBookmarks({ htmlContent } as any);
+		// 将HTML内容传递给后端
+		// 注意：后端期望的字段名是HtmlContent（首字母大写）
+		const response = await addMultipleBookmarks({
+			HtmlContent: htmlContent
+		} as any);
+
 		if (response.code === 0) {
 			ms.success(t('bookmarkManager.importSuccess').replace('count', (response.data as any).count));
 			ss.remove(BOOKMARKS_CACHE_KEY)
@@ -1179,6 +1217,8 @@ async function importBookmarksToServerWithHTML(htmlContent: string) {
 		uploadLoading.value = false;
 	}
 }
+
+// 不再需要此函数，后端已直接处理排序值
 
 
 // 过滤函数：从完整树结构中只保留文件夹
@@ -1393,7 +1433,7 @@ function buildBookmarkTree(bookmarks: any[]): TreeOption[] {
 	// 创建节点映射，用于快速查找
 	const nodeMap = new Map<string, TreeOption>();
 	const rootNodes: TreeOption[] = [];
-	
+
 	// 第一步：创建所有节点并添加到映射
 	for (const bookmark of bookmarks) {
 		const isFolder = bookmark.isFolder === 1;
@@ -1422,7 +1462,7 @@ function buildBookmarkTree(bookmarks: any[]): TreeOption[] {
 
 		// 获取父节点ID
 		const parentId = String(bookmark.parentUrl || bookmark.folderId || '0');
-		
+
 		if (parentId === '0' || parentId === '') {
 			// 根节点
 			rootNodes.push(node);

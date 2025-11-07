@@ -19,7 +19,7 @@ import (
 
 // BookmarkImportRequest 书签导入请求结构
 type BookmarkImportRequest struct {
-	HtmlContent string            `json:"htmlContent" binding:"required_without=Bookmarks"`
+	HtmlContent string            `json:"HtmlContent" binding:"required_without=Bookmarks"`
 	Bookmarks   []models.Bookmark `json:"Bookmarks" binding:"required_without=HtmlContent"`
 }
 
@@ -54,6 +54,39 @@ func (a *Bookmark) AddMultiple(c *gin.Context) {
 		// 为每个书签设置用户ID
 		for i := range bookmarks {
 			bookmarks[i].UserId = userInfo.ID
+		}
+	}
+
+	// 按parentUrl分组处理书签的sort值
+	// 1. 首先获取每个parentUrl下的当前最大sort值
+	parentUrlMaxSort := make(map[string]int)
+
+	// 收集所有需要处理的parentUrl
+	parentUrls := make(map[string]bool)
+	for _, b := range bookmarks {
+		parentUrls[b.ParentUrl] = true
+	}
+
+	// 为每个parentUrl获取当前最大sort值
+	for parentUrl := range parentUrls {
+		var maxSort int
+		query := global.Db.Model(&models.Bookmark{}).Where("user_id = ? AND parent_url = ?", userInfo.ID, parentUrl)
+		query.Select("COALESCE(MAX(sort), 0) as max_sort").Scan(&maxSort)
+		parentUrlMaxSort[parentUrl] = maxSort
+	}
+
+	// 2. 为每个parentUrl下的书签设置递增的sort值
+	// 先按parentUrl分组
+	bookmarksByParentUrl := make(map[string][]int) // key: parentUrl, value: 索引列表
+	for i, b := range bookmarks {
+		bookmarksByParentUrl[b.ParentUrl] = append(bookmarksByParentUrl[b.ParentUrl], i)
+	}
+
+	// 为每组书签设置递增的sort值
+	for parentUrl, indexes := range bookmarksByParentUrl {
+		currentMaxSort := parentUrlMaxSort[parentUrl]
+		for i, idx := range indexes {
+			bookmarks[idx].Sort = currentMaxSort + i + 1
 		}
 	}
 
@@ -248,6 +281,15 @@ func (a *Bookmark) Add(c *gin.Context) {
 	// 设置用户ID
 	req.UserId = userInfo.ID
 
+	// 获取parentUrl下的最大sort值并+1作为新的sort值
+	var maxSort int
+	// 使用COALESCE确保如果没有记录时返回0
+	query := global.Db.Model(&models.Bookmark{}).Where("user_id = ? AND parent_url = ?", userInfo.ID, req.ParentUrl)
+	query.Select("COALESCE(MAX(sort), 0) as max_sort").Scan(&maxSort)
+
+	// 设置新的sort值
+	req.Sort = maxSort + 1
+
 	// 插入数据库
 	if err := global.Db.Create(&req).Error; err != nil {
 		apiReturn.Error(c, "添加书签失败")
@@ -390,14 +432,25 @@ func (a *Bookmark) Update(c *gin.Context) {
 		return
 	}
 
-	// 更新书签信息
+	// 准备更新数据
 	updateData := map[string]interface{}{
 		"Title":     req.Title,
 		"Url":       req.Url,
 		"LanUrl":    req.LanUrl,
 		"ParentUrl": req.ParentUrl,
-		"Sort":      req.Sort,
 		"UpdatedAt": time.Now(),
+	}
+
+	// 如果parentUrl改变了，需要重新计算sort值
+	if bookmark.ParentUrl != req.ParentUrl {
+		// 获取新parentUrl下的最大sort值并+1
+		var maxSort int
+		query := global.Db.Model(&models.Bookmark{}).Where("user_id = ? AND parent_url = ?", userInfo.ID, req.ParentUrl)
+		query.Select("COALESCE(MAX(sort), 0) as max_sort").Scan(&maxSort)
+		updateData["Sort"] = maxSort + 1
+	} else {
+		// 如果parentUrl没变，保留原有的sort逻辑
+		updateData["Sort"] = req.Sort
 	}
 
 	if err := global.Db.Model(&bookmark).Updates(updateData).Error; err != nil {
@@ -425,11 +478,61 @@ func (a *Bookmark) Deletes(c *gin.Context) {
 		return
 	}
 
-	// 检查并删除用户的书签
-	if err := global.Db.Where("user_id = ? AND id IN ?", userInfo.ID, req.Ids).Delete(&models.Bookmark{}).Error; err != nil {
+	// 收集所有需要删除的书签ID，包括文件夹下的所有子项
+	var allIdsToDelete []int
+
+	// 遍历每个要删除的ID
+	for _, id := range req.Ids {
+		// 首先检查该ID是否属于当前用户
+		var bookmark models.Bookmark
+		if err := global.Db.Where("user_id = ? AND id = ?", userInfo.ID, id).First(&bookmark).Error; err != nil {
+			continue // 跳过不属于当前用户的书签
+		}
+
+		// 添加到要删除的列表中
+		allIdsToDelete = append(allIdsToDelete, id)
+
+		// 如果是文件夹，需要删除其下所有的书签和子文件夹
+		if bookmark.IsFolder == 1 {
+			// 递归获取所有子项ID
+			childIds := getAllChildBookmarkIds(userInfo.ID, bookmark.Title)
+			allIdsToDelete = append(allIdsToDelete, childIds...)
+		}
+	}
+
+	// 如果没有有效的ID需要删除，直接返回成功
+	if len(allIdsToDelete) == 0 {
+		apiReturn.Success(c)
+		return
+	}
+
+	// 删除所有收集到的书签，使用Unscoped()确保是硬删除
+	if err := global.Db.Unscoped().Where("user_id = ? AND id IN ?", userInfo.ID, allIdsToDelete).Delete(&models.Bookmark{}).Error; err != nil {
 		apiReturn.Error(c, "删除书签失败")
 		return
 	}
 
 	apiReturn.Success(c)
+}
+
+// getAllChildBookmarkIds 递归获取文件夹下所有子书签和子文件夹的ID
+func getAllChildBookmarkIds(userId uint, parentUrl string) []int {
+	var childIds []int
+	var childBookmarks []models.Bookmark
+
+	// 查询直接子项
+	if err := global.Db.Where("user_id = ? AND parent_url = ?", userId, parentUrl).Find(&childBookmarks).Error; err != nil {
+		return childIds
+	}
+
+	for _, child := range childBookmarks {
+		childIds = append(childIds, int(child.ID))
+		// 如果子项也是文件夹，递归获取其子项
+		if child.IsFolder == 1 {
+			grandChildIds := getAllChildBookmarkIds(userId, child.Title)
+			childIds = append(childIds, grandChildIds...)
+		}
+	}
+
+	return childIds
 }
