@@ -845,17 +845,17 @@ async function handleDrop(event: DragEvent, targetItem: any) {
 				// 如果两个位置相同，需要特殊处理以确保排序生效
 				let draggedSort = targetIndex + 1;
 				let targetSort = draggedIndex + 1;
-				
+
 				// 如果计算出的排序值相同，进行特殊处理
 				if (draggedSort === targetSort) {
 					// 给其中一个值加1，确保排序值不同
 					draggedSort += 1;
 				}
-				
+
 				// 从allFolders中查找当前文件夹的标题
 				const currentFolder = allFolders.value.find(folder => folder.value === draggedFolderId);
 				const parentUrlValue = currentFolder ? currentFolder.label : '0';
-				
+
 				const draggedUpdateData = {
 						id: Number(draggedItemData.id),
 						title: draggedItemData.title,
@@ -1499,10 +1499,6 @@ const handleResize = () => {
 onMounted(async () => {
 	// 首先设置selectedFolder为'0'
 	selectedFolder.value = '0'
-
-	// 清除缓存
-	ss.remove(BOOKMARKS_CACHE_KEY)
-	ss.remove(BOOKMARKS_FULL_CACHE_KEY)
 
 	// 加载数据
 	await refreshBookmarks();

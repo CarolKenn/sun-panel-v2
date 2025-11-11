@@ -667,7 +667,7 @@ onMounted(async () => {
     setTitle(panelState.panelConfig.logoText)
 
   // 加载书签数据，使用forceRefresh=true确保获取最新排序
-  await loadBookmarkTree(true)
+  await loadBookmarkTree(false)
   console.log('组件挂载完成，书签树数据已加载')
 })
 
