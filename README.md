@@ -22,7 +22,7 @@ Sun-Panel-V2 一个服务器、NAS导航面板、Homepage、浏览器首页、�
 - **自适应**： pc端和移动端样式自适应
 
 ![](./doc/images/main-dark.png)
-![](./doc/images/sqgl.png)
+![](./doc/images/newsqgl.png)
 <img src="./doc/images/ydsy.png" alt="示例图片" width="300" height="500">
 
 <img src="./doc/images/websqgl.png" alt="示例图片" width="300" height="500">
