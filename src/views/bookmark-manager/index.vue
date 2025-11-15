@@ -4,7 +4,7 @@
 		@contextmenu.prevent
 	>
 		<!-- 顶部标题栏 -->
-		<div class="p-4 border-b flex items-center justify-between bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 relative">
+		<div class="px-4 py-2.5 border-b flex items-center justify-between bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 relative">
 			<!-- 移动端左栏展开按钮 -->
 			<div
 				v-if="isMobile"
@@ -143,44 +143,87 @@
 				</div>
 			</div>
 
-				<!-- 书签列表 -->
-				<div class="flex-1 p-4 relative overflow-auto bg-white dark:bg-gray-800">
-					<div class="grid grid-cols-1 gap-2">
-						<div v-if="filteredBookmarks.length === 0" class="text-center py-8 text-gray-400 dark:text-gray-500">
-							{{ t('bookmarkManager.noData') }}
-						</div>
+				<!-- 书签列表 - 简洁列表样式 -->
+				<div class="flex-1 relative overflow-auto bg-white dark:bg-gray-800">
+					<div v-if="filteredBookmarks.length === 0" class="text-center py-8 text-gray-400 dark:text-gray-500">
+						{{ t('bookmarkManager.noData') }}
+					</div>
 
-						<div
-								v-for="item in filteredBookmarks"
-								:key="item.id"
-	:class="[
-		'flex items-center justify-between border p-2 rounded cursor-pointer bg-white dark:bg-gray-800',
-		dragOverTarget === item.id && item.isFolder 
-			? 'border-blue-500 bg-blue-50 dark:bg-blue-900 border-2' 
-			: 'border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
-	]"
-	@contextmenu.prevent="openContextMenu($event, item)"
-	@click="item.isFolder ? selectedFolder = String(item.id) : openBookmark(item)"
-	@dblclick="item.isFolder"
-	:draggable="true"
-	@dragstart="handleDragStart($event, item)"
-	@dragend="handleDragEnd($event); dragOverTarget = null"
-	@dragover="handleDragOver($event, item)"
-	@dragleave="handleDragLeave($event)"
-	@drop="handleDrop($event, item); dragOverTarget = null"
-	>
-		<div class="flex items-center space-x-2">
-			<span v-if="item.isFolder" class="text-blue-600">
-				<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-				</svg>
-			</span>
-			<span v-else class="w-[20px]">					<img v-if="item.iconJson" :src="item.iconJson.startsWith('data:') ? item.iconJson : 'data:image/png;base64,' + item.iconJson" alt="" class="w-4 h-4 inline-block rounded-full">
-				<span v-else class="w-4 h-4 inline-block bg-gray-200 rounded-full"></span>			</span>
-			<span class="font-medium text-slate-700 dark:text-white">{{ item.title }}</span>
-			<span v-if="!item.isFolder" class="text-slate-400 dark:text-slate-300 text-sm truncate max-w-[200px] whitespace-nowrap">{{ item.url }}</span>
-		</div>
-	</div>
+					<div v-else class="py-2">
+						<template v-for="(item, index) in filteredBookmarks" :key="item.id">
+							<!-- 插入位置指示器（在目标项上方） -->
+							<div
+								v-if="dragOverTarget === item.id && dragInsertPosition === 'before' && !item.isFolder"
+								class="h-0.5 bg-blue-500 mx-4"
+							></div>
+
+							<div
+								:class="[
+									'flex items-center px-4 py-2 cursor-pointer transition-colors group',
+									dragOverTarget === item.id && item.isFolder
+										? 'bg-blue-50 dark:bg-blue-900'
+										: dragOverTarget === item.id && !item.isFolder
+										? 'bg-blue-50 dark:bg-blue-900'
+										: selectedBookmarkId === String(item.id) || (item.isFolder && selectedFolder === String(item.id))
+										? 'bg-gray-100 dark:bg-gray-700'
+										: 'hover:bg-gray-50 dark:hover:bg-gray-700'
+								]"
+								@contextmenu.prevent="openContextMenu($event, item)"
+								@click="item.isFolder ? selectedFolder = String(item.id) : openBookmark(item)"
+								@dblclick="item.isFolder ? selectedFolder = String(item.id) : openBookmark(item)"
+								:draggable="true"
+								@dragstart="handleDragStart($event, item)"
+								@dragend="handleDragEnd($event); dragOverTarget = null; dragInsertPosition = null"
+								@dragover="handleDragOver($event, item)"
+								@dragleave="handleDragLeave($event)"
+								@drop="handleDrop($event, item); dragOverTarget = null; dragInsertPosition = null"
+							>
+								<!-- 图标 -->
+								<div class="flex-shrink-0 w-4 h-4 flex items-center justify-center mr-3">
+									<span v-if="item.isFolder" class="text-gray-400 dark:text-gray-500">
+										<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+										</svg>
+									</span>
+									<img v-else-if="item.iconJson"
+										:src="item.iconJson.startsWith('data:') ? item.iconJson : 'data:image/png;base64,' + item.iconJson"
+										alt=""
+										class="w-4 h-4 rounded"
+										onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
+									>
+									<span v-else class="w-4 h-4 bg-gray-200 dark:bg-gray-600 rounded" style="display: none;"></span>
+								</div>
+
+								<!-- 文本 - 悬停时在标题后显示URL -->
+								<div class="flex-1 min-w-0">
+									<div class="text-sm text-gray-900 dark:text-white truncate">
+										<span>{{ item.title }}</span>
+										<span v-if="!item.isFolder && item.url" class="text-gray-500 dark:text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity ml-2">
+											{{ item.url }}
+										</span>
+										<span v-else-if="item.isFolder" class="text-gray-400 dark:text-gray-500 italic opacity-0 group-hover:opacity-100 transition-opacity ml-2">
+											{{ t('bookmarkManager.folder') || '文件夹' }}
+										</span>
+									</div>
+								</div>
+
+								<!-- 三个点菜单 - 一直显示，颜色与右上角一致 -->
+								<div
+									class="flex-shrink-0 w-6 h-6 flex items-center justify-center ml-2 cursor-pointer text-gray-700 dark:text-white"
+									@click.stop="openContextMenu($event, item)"
+								>
+									<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+									</svg>
+								</div>
+							</div>
+
+							<!-- 插入位置指示器（在目标项下方） -->
+							<div
+								v-if="dragOverTarget === item.id && dragInsertPosition === 'after' && !item.isFolder"
+								class="h-0.5 bg-blue-500 mx-4"
+							></div>
+						</template>
 					</div>
 				</div>
 			</div>
@@ -293,12 +336,12 @@ function collapsePanel() {
 // 组件挂载时加载书签数据
 onMounted(() => {
 	refreshBookmarks();
-	
+
 	// 添加全局事件监听器
 	document.addEventListener('mousemove', handleMouseMove);
 	document.addEventListener('mouseup', stopResize);
 	document.addEventListener('click', handleGlobalClick);
-	
+
 	handleResize();
 	window.addEventListener('resize', handleResize);
 });
@@ -876,10 +919,10 @@ function checkIsDescendant(parentId: string | number, childId: string | number):
 		}
 		return null;
 	};
-	
+
 	const parentNode = findNode(fullData.value, parentId);
 	if (!parentNode) return false;
-	
+
 	// 递归检查子节点中是否包含childId
 	const checkChildren = (node: any): boolean => {
 		if (!node.children || node.children.length === 0) return false;
@@ -891,7 +934,7 @@ function checkIsDescendant(parentId: string | number, childId: string | number):
 		}
 		return false;
 	};
-	
+
 	return checkChildren(parentNode);
 }
 
@@ -980,11 +1023,11 @@ async function handleDrop(event: DragEvent, targetItem: any) {
 
 	// 检查目标项是否为文件夹
 	const isTargetFolder = targetItem.isFolder || targetItem.isFolder === true;
-	
+
 	// 如果目标是文件夹，将拖动的项移动到该文件夹下
 	if (isTargetFolder) {
 		console.log('目标项是文件夹，移动到文件夹下');
-		
+
 		// 检查是否试图将文件夹移动到自己的子文件夹中（防止循环）
 		if (draggedItemData.isFolder) {
 			const isDescendant = checkIsDescendant(draggedItemData.id, targetItem.id);
@@ -994,11 +1037,11 @@ async function handleDrop(event: DragEvent, targetItem: any) {
 				return;
 			}
 		}
-		
+
 		// 获取目标文件夹的标题和ID
 		const targetFolderTitle = targetItem.title || targetItem.label;
 		const targetFolderId = String(targetItem.id);
-		
+
 		// 检查是否试图移动到自己的位置
 		const draggedParentId = String(draggedItemData.folderId || '0');
 		if (draggedParentId === targetFolderId) {
@@ -1006,15 +1049,15 @@ async function handleDrop(event: DragEvent, targetItem: any) {
 			draggedItem.value = null;
 			return;
 		}
-		
+
 		// 获取目标文件夹下的最大sort值
-		const targetFolderItems = allItems.value.filter(item => 
+		const targetFolderItems = allItems.value.filter(item =>
 			String(item.folderId || '0') === targetFolderId
 		);
-		const maxSort = targetFolderItems.length > 0 
+		const maxSort = targetFolderItems.length > 0
 			? Math.max(...targetFolderItems.map(item => item.sort || 0))
 			: 0;
-		
+
 		// 准备更新数据
 		const updateData = {
 			id: Number(draggedItemData.id),
@@ -1027,22 +1070,19 @@ async function handleDrop(event: DragEvent, targetItem: any) {
 			icon: draggedItemData.icon || null,
 			iconJson: draggedItemData.iconJson || ''
 		};
-		
+
 		try {
 			// 调用更新接口
 			const response = await update(updateData);
 			if (response && response.code === 0) {
 				// 更新本地缓存
 				updateCacheAfterUpdate(response.data);
-				ms.success(t('bookmarkManager.moveSuccess') || '移动成功');
-			} else {
-				ms.error(`${t('bookmarkManager.moveFailed') || '移动失败'}: ${response?.msg || ''}`);
 			}
 		} catch (error) {
 			console.error('移动书签失败:', error);
 			ms.error(`${t('bookmarkManager.moveFailed') || '移动失败'}: ${(error as Error).message || ''}`);
 		}
-		
+
 		draggedItem.value = null;
 		return;
 	}
@@ -1321,10 +1361,10 @@ async function handleDrop(event: DragEvent, targetItem: any) {
 			const processCacheNode = (node) => {
 				// Extract parentUrl correctly from rawNode or ParentUrl property
 				const parentUrl = node.rawNode?.parentUrl || node.ParentUrl || '0';
-				
+
 				// Process the current node
-				const processedNode = { 
-					...node, 
+				const processedNode = {
+					...node,
 					isFolder: node.isFolder ? 1 : 0,
 					ParentUrl: parentUrl.toString() // Convert to string
 				};
@@ -1483,7 +1523,6 @@ async function saveBookmarkChanges() {
 				if (createResponse && createResponse.code === 0) {
 					// 更新本地缓存数据，而不是强制刷新
 					updateCacheAfterAdd(createResponse.data);
-					ms.success(t('bookmarkManager.createSuccess'));
 					isEditDialogOpen.value = false;
 					isCreateMode.value = false;
 				} else {
@@ -1528,7 +1567,6 @@ async function saveBookmarkChanges() {
 				if (updateResponse && updateResponse.code === 0) {
 					// 更新本地缓存数据，而不是强制刷新
 					updateCacheAfterUpdate(updateResponse.data);
-					ms.success(t('bookmarkManager.updateSuccess'));
 					isEditDialogOpen.value = false;
 				} else {
 					ms.error(`${t('bookmarkManager.updateFailed')} ${updateResponse?.msg || t('bookmarkManager.unknownError')}`);
@@ -1561,14 +1599,14 @@ async function deleteBookmark(bookmark: Bookmark) {
 					 if (selectedBookmarkId.value === bookmark.id.toString()) {
 						 selectedBookmarkId.value = '';
 					 }
+					 // 如果删除的是当前选中的文件夹，清空选中状态
+					 if (bookmark.isFolder && selectedFolder.value === bookmark.id.toString()) {
+						 selectedFolder.value = '0';
+					 }
 
 					 // 更新本地缓存数据，而不是强制刷新
 					 updateCacheAfterDelete(Number(bookmark.id), bookmark.isFolder || false);
 
-					 // 使用setTimeout确保DOM更新后显示成功消息
-					 setTimeout(() => {
-						 ms.success(t('common.success'));
-					 }, 100);
 				 } else {
 					 ms.error(`${t('common.failed')}: ${response.msg}`);
 				 }
@@ -1643,7 +1681,6 @@ async function importBookmarksToServerWithHTML(htmlContent: string) {
 		} as any);
 
 		if (response.code === 0) {
-			ms.success(t('bookmarkManager.importSuccess').replace('count', (response.data as any).count));
 			ss.remove(BOOKMARKS_CACHE_KEY)
 			// 刷新书签列表
 			await refreshBookmarks();
@@ -1856,7 +1893,7 @@ if (response.code === 0) {
 		// 如果data本身是数组，直接使用
 		if (Array.isArray(response.data)) {
 			serverBookmarks = response.data;
-		} 
+		}
 		// 如果data是包含list字段的对象，使用list字段
 		else if (Array.isArray(response.data.list)) {
 			serverBookmarks = response.data.list;
@@ -1939,7 +1976,7 @@ function convertServerTreeToFrontendTree(serverTree: any[]): TreeOption[] {
 	function processNode(node: any): TreeOption {
 		// 检查是否已经是TreeOption对象（首页缓存）
 		const isTreeOption = node.hasOwnProperty('key') && node.hasOwnProperty('label');
-		
+
 		let nodeKey: string;
 		let isFolder: boolean;
 		let title: string;
@@ -1947,7 +1984,7 @@ function convertServerTreeToFrontendTree(serverTree: any[]): TreeOption[] {
 		let iconJson: string;
 		let children: any[];
 		let rawNode: any;
-	
+
 		if (isTreeOption) {
 			// 处理首页缓存的TreeOption数据
 			nodeKey = String(node.key);
@@ -1973,16 +2010,16 @@ function convertServerTreeToFrontendTree(serverTree: any[]): TreeOption[] {
 				parentUrl: node.parentUrl || '0'
 			};
 		}
-	
+
 		const hasChildren = Array.isArray(children) && children.length > 0;
-		
+
 		// 构建基本节点结构
 		const frontendNode: TreeOption = {
     key: nodeKey,
     label: title || '未命名',
     isLeaf: !isFolder || !hasChildren,
     isFolder: isFolder,
-    bookmark: isFolder ? undefined : { id: node.id || nodeKey, title: title, url: url || '', iconJson: iconJson || '', sort: node.sort || 0 }, 
+    bookmark: isFolder ? undefined : { id: node.id || nodeKey, title: title, url: url || '', iconJson: iconJson || '', sort: node.sort || 0 },
     children: [],
     rawNode: rawNode,
     disabledExpand: !hasChildren,
@@ -2029,7 +2066,7 @@ function buildBookmarkTree(bookmarks: any[]): TreeOption[] {
 		// 1. 服务器原始数据格式 (id, title, isFolder, url, iconJson)
 		// 2. 前端节点格式 (key, label, isFolder, bookmark)
 		const isFrontendFormat = bookmark.hasOwnProperty('key') && bookmark.hasOwnProperty('label');
-		
+
 		// 提取基本属性
 		const nodeId = isFrontendFormat ? bookmark.key : bookmark.id || bookmark.Key || '0';
 		const nodeKey = String(nodeId);
@@ -2039,18 +2076,18 @@ function buildBookmarkTree(bookmarks: any[]): TreeOption[] {
 		const iconJson = isFrontendFormat ? (bookmark.bookmark?.iconJson || '') : bookmark.iconJson || '';
 		const parentUrl = isFrontendFormat ? (bookmark.rawNode?.parentUrl || bookmark.ParentUrl || '0') : (bookmark.parentUrl || bookmark.folderId || '0');
 		const sort = isFrontendFormat ? (bookmark.bookmark?.sort || 0) : (bookmark.sort || 0);
-		
+
 		const node: TreeOption = {
 			key: nodeKey,
 			label: title || '未命名',
 			isLeaf: !isFolder,
 			isFolder: isFolder,
-			bookmark: isFolder ? undefined : { 
-				id: nodeId, 
-				title: title || '未命名', 
-				url: url, 
-				iconJson: iconJson, 
-				sort: sort 
+			bookmark: isFolder ? undefined : {
+				id: nodeId,
+				title: title || '未命名',
+				url: url,
+				iconJson: iconJson,
+				sort: sort
 			},
 			rawNode: {
 				...bookmark,
@@ -2174,7 +2211,7 @@ function updateCacheAfterAdd(bookmark: any) {
 
 		// 将新书签转换为缓存格式
 		const newBookmark = convertBookmarkToCacheNode(bookmark);
-		
+
 		// 处理缓存数据
 		let cacheList: any[] = [];
 		if (Array.isArray(cachedData)) {
@@ -2212,7 +2249,7 @@ function updateCacheAfterAdd(bookmark: any) {
 
 		// 更新缓存
 		ss.set(BOOKMARKS_CACHE_KEY, cacheList);
-		
+
 		// 重新构建树并更新UI
 		const treeDataResult = convertServerTreeToFrontendTree(cacheList);
 		fullData.value = treeDataResult;
@@ -2251,13 +2288,13 @@ function updateCacheAfterUpdate(bookmark: any) {
 			// 保存原来的parentUrl用于比较
 			const oldParentUrl = node.parentUrl || '0';
 			const newParentUrl = bookmark.parentUrl || '0';
-			
+
 			// 更新节点属性
 			node.title = bookmark.title;
 			node.url = bookmark.url || '';
 			node.iconJson = bookmark.iconJson || '';
 			node.sort = bookmark.sort || 0;
-			
+
 			// 如果parentUrl改变了，需要移动节点
 			if (oldParentUrl !== newParentUrl) {
 				// 从原位置删除
@@ -2295,7 +2332,7 @@ function updateCacheAfterUpdate(bookmark: any) {
 
 		// 更新缓存
 		ss.set(BOOKMARKS_CACHE_KEY, cacheList);
-		
+
 		// 重新构建树并更新UI
 		const treeDataResult = convertServerTreeToFrontendTree(cacheList);
 		fullData.value = treeDataResult;
@@ -2318,9 +2355,15 @@ function updateCacheAfterDelete(bookmarkId: number, isFolder: boolean) {
 			return;
 		}
 
+		// 处理缓存数据格式（可能是树形结构或列表）
 		let cacheList: any[] = [];
 		if (Array.isArray(cachedData)) {
-			cacheList = cachedData;
+			// 检查是否是树形结构（有children字段）
+			if (cachedData.length > 0 && cachedData[0].children !== undefined) {
+				cacheList = cachedData; // 树形结构
+			} else {
+				cacheList = cachedData; // 扁平列表
+			}
 		} else if (cachedData.list && Array.isArray(cachedData.list)) {
 			cacheList = cachedData.list;
 		} else {
@@ -2328,22 +2371,75 @@ function updateCacheAfterDelete(bookmarkId: number, isFolder: boolean) {
 			return;
 		}
 
-		// 递归删除函数
-		const deleteNodeRecursive = (nodes: any[], id: number): boolean => {
-			for (let i = 0; i < nodes.length; i++) {
-				if (nodes[i].id === id) {
-					// 如果是文件夹，先删除所有子项
-					if (nodes[i].isFolder === 1 && nodes[i].children) {
-						const childrenIds = nodes[i].children.map((child: any) => child.id);
-						for (const childId of childrenIds) {
-							deleteNodeRecursive(cacheList, childId);
+		// 收集所有需要删除的ID（包括文件夹下的所有子项）
+		const collectAllIdsToDelete = (nodes: any[], targetId: number): number[] => {
+			const idsToDelete: number[] = [];
+			
+			// 查找目标节点（支持id和key匹配）
+			const findNode = (nodeList: any[]): any => {
+				for (const node of nodeList) {
+					const nodeId = Number(node.id || node.key || 0);
+					if (nodeId === targetId) {
+						return node;
+					}
+					if (node.children && node.children.length > 0) {
+						const found = findNode(node.children);
+						if (found) return found;
+					}
+				}
+				return null;
+			};
+			
+			const targetNode = findNode(nodes);
+			if (!targetNode) {
+				console.warn('未找到要删除的节点:', bookmarkId, '缓存数据:', cacheList);
+				return idsToDelete;
+			}
+			
+			// 添加目标节点ID
+			const targetNodeId = Number(targetNode.id || targetNode.key || bookmarkId);
+			idsToDelete.push(targetNodeId);
+			
+			// 如果是文件夹，递归收集所有子项ID
+			if ((targetNode.isFolder === 1 || targetNode.isFolder === true) && targetNode.children && targetNode.children.length > 0) {
+				const collectChildrenIds = (children: any[]) => {
+					for (const child of children) {
+						const childId = Number(child.id || child.key || 0);
+						if (childId > 0) {
+							idsToDelete.push(childId);
+						}
+						// 如果子项也是文件夹，递归收集其子项
+						if ((child.isFolder === 1 || child.isFolder === true) && child.children && child.children.length > 0) {
+							collectChildrenIds(child.children);
 						}
 					}
+				};
+				collectChildrenIds(targetNode.children);
+			}
+			
+			return idsToDelete;
+		};
+		
+		// 收集所有需要删除的ID
+		const idsToDelete = collectAllIdsToDelete(cacheList, bookmarkId);
+		console.log('要删除的ID列表:', idsToDelete, '目标ID:', bookmarkId);
+		
+		if (idsToDelete.length === 0) {
+			console.warn('未找到要删除的节点，刷新数据');
+			refreshBookmarks(false);
+			return;
+		}
+		
+		// 递归删除函数（删除指定ID的节点，支持id和key匹配）
+		const deleteNodeById = (nodes: any[], id: number): boolean => {
+			for (let i = 0; i < nodes.length; i++) {
+				const nodeId = Number(nodes[i].id || nodes[i].key || 0);
+				if (nodeId === id) {
 					nodes.splice(i, 1);
 					return true;
 				}
 				if (nodes[i].children && nodes[i].children.length > 0) {
-					if (deleteNodeRecursive(nodes[i].children, id)) {
+					if (deleteNodeById(nodes[i].children, id)) {
 						return true;
 					}
 				}
@@ -2351,11 +2447,23 @@ function updateCacheAfterDelete(bookmarkId: number, isFolder: boolean) {
 			return false;
 		};
 
-		// 删除节点
-		deleteNodeRecursive(cacheList, bookmarkId);
+		// 删除所有收集到的节点（按ID从大到小排序，先删除子项再删除父项）
+		const sortedIds = [...idsToDelete].sort((a, b) => b - a);
+		let deletedCount = 0;
+		for (const id of sortedIds) {
+			const deleted = deleteNodeById(cacheList, id);
+			if (deleted) {
+				deletedCount++;
+			} else {
+				console.warn('删除节点失败，ID:', id);
+			}
+		}
+		
+		console.log('成功删除节点数:', deletedCount, '/', sortedIds.length);
 
 		// 更新缓存
 		ss.set(BOOKMARKS_CACHE_KEY, cacheList);
+		console.log('缓存已更新，剩余节点数:', cacheList.length);
 		
 		// 重新构建树并更新UI
 		const treeDataResult = convertServerTreeToFrontendTree(cacheList);
