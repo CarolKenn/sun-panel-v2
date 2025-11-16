@@ -168,7 +168,7 @@
 										? 'bg-gray-100 dark:bg-gray-700'
 										: 'hover:bg-gray-50 dark:hover:bg-gray-700'
 								]"
-								@contextmenu.prevent="openContextMenu($event, item)"
+								@contextmenu.prevent="!isMobile ? openContextMenu($event, item) : null"
 								@click="item.isFolder ? selectedFolder = String(item.id) : openBookmark(item)"
 								@dblclick="item.isFolder ? selectedFolder = String(item.id) : openBookmark(item)"
 								:draggable="true"
@@ -871,7 +871,11 @@ const renderTreeLabel = ({ option }: { option: any }) => {
         handleDrop(e, treeItem);
       },
       onContextmenu: (e: MouseEvent) => {
-        handleTreeContextMenu({ node: option, event: e })
+        e.preventDefault()
+        e.stopPropagation()
+        if (!isMobile.value) {
+          handleTreeContextMenu({ node: option, event: e })
+        }
       },
     },
     content
