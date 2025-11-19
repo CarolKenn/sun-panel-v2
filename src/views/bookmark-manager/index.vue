@@ -389,6 +389,10 @@ interface Bookmark {
 	updateTime?: string
 	iconJson?: string
 	sort?: number
+	parentUrl?: string
+	icon?: any | null
+	lanUrl?: string
+	openMethod?: number
 }
 
 
@@ -972,14 +976,41 @@ const dragInsertPosition = ref<'before' | 'after' | null>(null);
 
 function handleDragOver(event: DragEvent, item?: any) {
 	event.preventDefault();
+	if (!item || !event.currentTarget) {
+		dragOverTarget.value = null;
+		dragInsertPosition.value = null;
+		return;
+	}
+
+	const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+	const mouseY = event.clientY;
+	const itemHeight = rect.height;
+	const mousePosition = mouseY - rect.top;
+
 	if (event.dataTransfer) {
-		// 如果目标是文件夹，显示移动效果
 		if (item && (item.isFolder || item.isFolder === true)) {
+			// 文件夹逻辑：上1/3插入前，中1/3移动到文件夹，下1/3插入后
+			if (mousePosition < itemHeight / 3) {
+				// 上1/3 - 插入到文件夹前
+				event.dataTransfer.dropEffect = 'move';
+				dragOverTarget.value = item.id;
+				dragInsertPosition.value = 'before';
+			} else if (mousePosition > (2 * itemHeight) / 3) {
+				// 下1/3 - 插入到文件夹后
+				event.dataTransfer.dropEffect = 'move';
+				dragOverTarget.value = item.id;
+				dragInsertPosition.value = 'after';
+			} else {
+				// 中间 - 移动到文件夹内
+				event.dataTransfer.dropEffect = 'move';
+				dragOverTarget.value = item.id;
+				dragInsertPosition.value = null;
+			}
+		} else {
+			// 普通项逻辑：上半部分插入前，下半部分插入后
 			event.dataTransfer.dropEffect = 'move';
 			dragOverTarget.value = item.id;
-		} else {
-			event.dataTransfer.dropEffect = 'move';
-			dragOverTarget.value = item?.id || null;
+			dragInsertPosition.value = mousePosition < itemHeight / 2 ? 'before' : 'after';
 		}
 	}
 }
@@ -1116,53 +1147,52 @@ async function handleDrop(event: DragEvent, targetItem: any) {
 	console.log('项目索引:', { draggedIndex, targetIndex, folderItemsCount: currentFolderItems.length });
 
 	if (draggedIndex !== -1 && targetIndex !== -1) {
-		// 实现交换排序的逻辑
-				// 方案：交换两个项目的排序值
-				// 如果两个位置相同，需要特殊处理以确保排序生效
-				let draggedSort = targetIndex + 1;
-				let targetSort = draggedIndex + 1;
-
-				// 如果计算出的排序值相同，进行特殊处理
-				if (draggedSort === targetSort) {
-					// 给其中一个值加1，确保排序值不同
-					draggedSort += 1;
-				}
-
-				// 从allFolders中查找当前文件夹的标题
-				const currentFolder = allFolders.value.find(folder => folder.value === draggedFolderId);
-				const parentUrlValue = currentFolder ? currentFolder.label : '0';
-
-				const draggedUpdateData = {
-						id: Number(draggedItemData.id),
-						title: draggedItemData.title,
-						url: draggedItemData.isFolder ? draggedItemData.title : (draggedItemData.url || ''),
-						parentUrl: parentUrlValue,
-					sort: draggedSort,
-						lanUrl: draggedItemData.lanUrl || '',
-						openMethod: draggedItemData.openMethod || 0,
-						icon: draggedItemData.icon || null
-				};
-
-				const targetUpdateData = {
-						id: Number(targetItem.id),
-						title: targetItem.title,
-						url: targetItem.isFolder ? targetItem.title : (targetItem.url || ''),
-						parentUrl: parentUrlValue,
-					sort: targetSort,
-						lanUrl: targetItem.lanUrl || '',
-						openMethod: targetItem.openMethod || 0,
-						icon: targetItem.icon || null
-				};
-
+		// 实现插入排序的逻辑
+		// 步骤1：获取当前文件夹的所有项目并按sort排序
+			const sortedFolderItems = [...currentFolderItems].sort((a, b) => (a.sort || 0) - (b.sort || 0));
+			
+			// 步骤2：找到拖拽项和目标项在排序后的索引
+			const sortedDraggedIndex = sortedFolderItems.findIndex(item => String(item.id) === String(draggedItemData.id));
+			const sortedTargetIndex = sortedFolderItems.findIndex(item => String(item.id) === String(targetItem.id));
+			
+			// 步骤3：根据插入位置确定新的索引
+			let newIndex;
+			if (dragInsertPosition.value === 'before') {
+				newIndex = sortedTargetIndex;
+			} else if (dragInsertPosition.value === 'after') {
+				newIndex = sortedTargetIndex + 1;
+			} else {
+				// 默认行为 - 如果没有插入位置，则根据原始索引决定
+				newIndex = draggedIndex < targetIndex ? targetIndex : targetIndex + 1;
+			}
+			
+			// 步骤4：从排序数组中移除拖拽项并插入到新位置
+			const updatedItems = [...sortedFolderItems];
+			updatedItems.splice(sortedDraggedIndex, 1);
+			updatedItems.splice(newIndex, 0, draggedItemData);
+			
+			// 步骤5：重新计算所有项目的sort值
+			const itemsToUpdate = updatedItems.map((item, index) => ({
+				id: Number(item.id),
+				title: item.title,
+				url: item.isFolder ? item.title : (item.url || ''),
+				parentUrl: (item as any).parentUrl || '',
+				sort: index + 1,
+				lanUrl: (item as any).lanUrl || '',
+				openMethod: (item as any).openMethod || 0,
+				icon: (item as any).icon || null,
+				iconJson: item.iconJson || ''
+			}));
+		
+		// 查找当前文件夹信息以获取parentUrl
+			// const currentFolder = allFolders.value.find(folder => folder.value === draggedFolderId);
+			// const parentUrlValue = currentFolder ? currentFolder.label : '';
 
 		try {
-			// 先更新拖拽项
-			const draggedResponse = await update(draggedUpdateData);
-			console.log('拖拽项更新响应:', draggedResponse);
-
-			// 再更新目标项
-			const targetResponse = await update(targetUpdateData);
-			console.log('目标项更新响应:', targetResponse);
+			// 更新所有受影响的项目的排序值
+			for (const item of itemsToUpdate) {
+				await update(item);
+			}
 
 			// 更新本地数据以避免UI闪烁
 				const updateLocalItemSort = (itemId: number, newSort: number) => {
@@ -1220,9 +1250,10 @@ async function handleDrop(event: DragEvent, targetItem: any) {
 				bookmarkTree.value = [...bookmarkTree.value];
 			};
 
-			// 更新拖拽项和目标项的排序值
-			updateLocalItemSort(Number(draggedItemData.id), draggedSort);
-			updateLocalItemSort(Number(targetItem.id), targetSort);
+			// 更新所有项目的排序值
+			for (const item of itemsToUpdate) {
+				updateLocalItemSort(Number(item.id), item.sort);
+			}
 
 			// 根据更新后的sort值重新排序fullData数组（顶层节点）
 			fullData.value.sort((a, b) => (a.sort || 0) - (b.sort || 0));
