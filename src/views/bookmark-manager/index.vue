@@ -1171,22 +1171,27 @@ async function handleDrop(event: DragEvent, targetItem: any) {
 			updatedItems.splice(sortedDraggedIndex, 1);
 			updatedItems.splice(newIndex, 0, draggedItemData);
 			
-			// 步骤5：重新计算所有项目的sort值
-			const itemsToUpdate = updatedItems.map((item, index) => ({
+			// 查找当前文件夹信息以获取parentUrl
+			const currentFolder = allFolders.value.find(folder => folder.value === draggedFolderId);
+			const parentUrlValue = currentFolder ? currentFolder.label : '';
+			
+			// 步骤5：确定需要更新的索引范围
+			const originalIndex = sortedDraggedIndex;
+			const startUpdateIndex = Math.min(newIndex, originalIndex);
+			const endUpdateIndex = Math.max(newIndex, originalIndex);
+			
+			// 步骤6：仅更新受影响的项目的sort值
+			const itemsToUpdate = updatedItems.slice(startUpdateIndex, endUpdateIndex + 1).map((item, offset) => ({
 				id: Number(item.id),
 				title: item.title,
 				url: item.isFolder ? item.title : (item.url || ''),
-				parentUrl: (item as any).parentUrl || '',
-				sort: index + 1,
+				parentUrl: parentUrlValue,
+				sort: startUpdateIndex + 1 + offset, // 新的sort值基于起始索引加偏移量
 				lanUrl: (item as any).lanUrl || '',
 				openMethod: (item as any).openMethod || 0,
 				icon: (item as any).icon || null,
 				iconJson: item.iconJson || ''
 			}));
-		
-		// 查找当前文件夹信息以获取parentUrl
-			// const currentFolder = allFolders.value.find(folder => folder.value === draggedFolderId);
-			// const parentUrlValue = currentFolder ? currentFolder.label : '';
 
 		try {
 			// 更新所有受影响的项目的排序值
