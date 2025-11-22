@@ -101,6 +101,7 @@
 				<n-tree
 					:data="bookmarkTree"
 					:default-expanded-keys="defaultExpandedKeys"
+					:selected-keys="selectedKeysRef"
 					block-line
 					@update:selected-keys="handleSelect"
 					@expand="handleNodeExpand"
@@ -169,7 +170,7 @@
 										: 'hover:bg-gray-50 dark:hover:bg-gray-700'
 								]"
 								@contextmenu.prevent="!isMobile ? openContextMenu($event, item) : null"
-								@click="item.isFolder ? selectedFolder = String(item.id) : openBookmark(item)"
+								@click="focusedItemId = String(item.id)"
 								@dblclick="item.isFolder ? selectedFolder = String(item.id) : openBookmark(item)"
 								:draggable="true"
 								@dragstart="handleDragStart($event, item)"
@@ -194,14 +195,14 @@
 									<span v-else class="w-4 h-4 bg-gray-200 dark:bg-gray-600 rounded" style="display: none;"></span>
 								</div>
 
-								<!-- 文本 - 悬停时在标题后显示URL -->
+								<!-- 文本 - 聚焦时在标题后显示URL -->
 								<div class="flex-1 min-w-0">
 									<div class="text-sm text-gray-900 dark:text-white truncate">
 										<span>{{ item.title }}</span>
-										<span v-if="!item.isFolder && item.url" class="text-gray-500 dark:text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity ml-2">
+										<span v-if="!item.isFolder && item.url && focusedItemId === String(item.id)" class="text-gray-500 dark:text-gray-400 transition-opacity ml-2">
 											{{ item.url }}
 										</span>
-										<span v-else-if="item.isFolder" class="text-gray-400 dark:text-gray-500 italic opacity-0 group-hover:opacity-100 transition-opacity ml-2">
+										<span v-else-if="item.isFolder && focusedItemId === String(item.id)" class="text-gray-400 dark:text-gray-500 italic transition-opacity ml-2">
 											{{ t('bookmarkManager.folder') || '文件夹' }}
 										</span>
 									</div>
@@ -494,6 +495,9 @@ const selectedKeysRef = ref<(string | number)[]>([]);
 
 // 当前选中的书签ID（用于显示单个书签）
 const selectedBookmarkId = ref<string>('')
+
+// 当前聚焦的项目ID（用于单击显示URL）
+const focusedItemId = ref<string>('')
 
 // 拖拽相关
 const draggedItem = ref<any>(null)
@@ -1041,6 +1045,42 @@ watch(fullData, () => {
   }, 0);
 }, { immediate: true, deep: true });
 
+// 监听selectedFolder变化,同步左侧树的展开状态和选中状态
+watch(selectedFolder, (newFolderId) => {
+  if (newFolderId && newFolderId !== '0') {
+    // 构建从根到当前文件夹的路径
+    const buildPath = (nodes: any[], targetId: string, path: string[] = []): string[] | null => {
+      for (const node of nodes) {
+        const nodeId = String(node.key);
+        const currentPath = [...path, nodeId];
+        
+        if (nodeId === targetId) {
+          return currentPath;
+        }
+        
+        if (node.children && node.children.length > 0) {
+          const found = buildPath(node.children, targetId, currentPath);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+    
+    const path = buildPath(bookmarkTree.value, newFolderId);
+    if (path) {
+      // 展开路径上的所有父文件夹(不包括当前文件夹本身)
+      const parentPath = path.slice(0, -1);
+      defaultExpandedKeys.value = [...new Set([...defaultExpandedKeys.value, ...parentPath])];
+      
+      // 高亮当前文件夹
+      selectedKeysRef.value = [newFolderId];
+    }
+  } else if (newFolderId === '0') {
+    // 如果是根目录,清除选中状态
+    selectedKeysRef.value = [];
+  }
+}, { immediate: false });
+
 
 // 处理拖拽放置 - 支持移动到文件夹或排序
 async function handleDrop(event: DragEvent, targetItem: any) {
@@ -1130,13 +1170,67 @@ async function handleDrop(event: DragEvent, targetItem: any) {
 	}
 
 	// 其他情况:执行排序逻辑(包括文件夹与文件夹之间的排序、书签与书签之间的排序)
+	// 注意:如果是拖到文件夹上且dragInsertPosition为null,说明是要移动到文件夹内,已经在上面处理了
+	// 这里只处理排序的情况(dragInsertPosition为'before'或'after')
 	const draggedFolderId = String(draggedItemData.folderId || '0');
 	const targetFolderId = String(targetItem.folderId || '0');
 
+	// 特殊情况:如果目标是文件夹,且拖拽项不在同一父文件夹,则视为移动到该文件夹
+	// (即使dragInsertPosition不为null,也应该移动到文件夹内,而不是排序)
+	if (isTargetFolder && draggedFolderId !== targetFolderId) {
+		// 获取目标文件夹的标题和ID
+		const targetFolderTitle = targetItem.title || targetItem.label;
+		const targetFolderIdValue = String(targetItem.id);
+
+		// 检查是否试图将文件夹移动到自己的子文件夹中（防止循环）
+		if (draggedItemData.isFolder) {
+			const isDescendant = checkIsDescendant(draggedItemData.id, targetItem.id);
+			if (isDescendant) {
+				ms.warning('不能将文件夹移动到自己的子文件夹中');
+				draggedItem.value = null;
+				return;
+			}
+		}
+
+		// 获取目标文件夹下的最大sort值
+		const targetFolderItems = allItems.value.filter(item =>
+			String(item.folderId || '0') === targetFolderIdValue
+		);
+		const maxSort = targetFolderItems.length > 0
+			? Math.max(...targetFolderItems.map(item => item.sort || 0))
+			: 0;
+
+		// 准备更新数据
+		const updateData = {
+			id: Number(draggedItemData.id),
+			title: draggedItemData.title,
+			url: draggedItemData.isFolder ? draggedItemData.title : (draggedItemData.url || ''),
+			parentUrl: targetFolderTitle, // 使用文件夹标题作为parentUrl
+			sort: maxSort + 1,
+			lanUrl: draggedItemData.lanUrl || '',
+			openMethod: draggedItemData.openMethod || 0,
+			icon: draggedItemData.icon || null,
+			iconJson: draggedItemData.iconJson || ''
+		};
+
+		try {
+			// 调用更新接口
+			const response = await update(updateData);
+			if (response && response.code === 0) {
+				// 更新本地缓存
+				updateCacheAfterUpdate(response.data);
+			}
+		} catch (error) {
+			console.error('移动书签失败:', error);
+			ms.error(`${t('bookmarkManager.moveFailed') || '移动失败'}: ${(error as Error).message || ''}`);
+		}
+
+		draggedItem.value = null;
+		return;
+	}
 
 	// 确保它们在同一个文件夹中才能排序
 	if (draggedFolderId !== targetFolderId) {
-
 		ms.warning('只能在同一文件夹内拖拽排序');
 		draggedItem.value = null;
 		return;
@@ -1164,11 +1258,11 @@ async function handleDrop(event: DragEvent, targetItem: any) {
 
 			if (hasDuplicates) {
 
-				
+
 				// 获取当前文件夹信息
 				const currentFolder = allFolders.value.find(folder => folder.value === draggedFolderId);
 				const parentUrlValue = currentFolder ? currentFolder.label : '';
-				
+
 				// 重新分配连续的sort值 (1, 2, 3...)
 				const normalizedItems = sortedFolderItems.map((item, index) => ({
 					id: Number(item.id),
