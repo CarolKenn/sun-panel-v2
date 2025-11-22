@@ -151,9 +151,9 @@
 
 					<div v-else class="py-2">
 						<template v-for="item in filteredBookmarks" :key="item.id">
-							<!-- 插入位置指示器（在目标项上方） -->
+							<!-- 插入位置指示器(在目标项上方) -->
 							<div
-								v-if="dragOverTarget === item.id && dragInsertPosition === 'before' && !item.isFolder"
+								v-if="dragOverTarget === item.id && dragInsertPosition === 'before'"
 								class="h-0.5 bg-blue-500 mx-4"
 							></div>
 
@@ -218,9 +218,9 @@
 								</div>
 							</div>
 
-							<!-- 插入位置指示器（在目标项下方） -->
+							<!-- 插入位置指示器(在目标项下方) -->
 							<div
-								v-if="dragOverTarget === item.id && dragInsertPosition === 'after' && !item.isFolder"
+								v-if="dragOverTarget === item.id && dragInsertPosition === 'after'"
 								class="h-0.5 bg-blue-500 mx-4"
 							></div>
 						</template>
@@ -424,7 +424,12 @@ const allItems = computed<(Bookmark & { isFolder?: boolean })[]>(() => {
 					title: node.label,
 					url: '',
 					folderId: String(folderId),
-					isFolder: true
+					isFolder: true,
+					sort: node.sort || node.rawNode?.sort || 0,  // 添加sort值
+					iconJson: node.rawNode?.iconJson || '',
+					lanUrl: node.rawNode?.lanUrl || '',
+					openMethod: node.rawNode?.openMethod || 0,
+					icon: node.rawNode?.icon || null
 				})
 			}
 			// 如果是书签节点，添加到列表
@@ -599,7 +604,7 @@ function handleNodeExpand(node: any) {
 		selectedFolder.value = key;
 		// 确保选中状态正确更新
 		selectedKeysRef.value = [key];
-		
+
 	}
 }
 
@@ -1039,7 +1044,7 @@ watch(fullData, () => {
 
 // 处理拖拽放置 - 支持移动到文件夹或排序
 async function handleDrop(event: DragEvent, targetItem: any) {
-	console.log('=== handleDrop 开始 ===');
+
 	event.preventDefault();
 
 	// 移除拖拽时的视觉效果
@@ -1049,20 +1054,21 @@ async function handleDrop(event: DragEvent, targetItem: any) {
 
 	// 确保拖拽项存在且不是同一个项目
 	if (!draggedItem.value || draggedItem.value.id === targetItem.id) {
-		console.log('拖拽项不存在或与目标项相同');
+
 		draggedItem.value = null;
 		return;
 	}
 
 	const draggedItemData = draggedItem.value;
-	console.log('拖拽项:', draggedItemData.id, '目标项:', targetItem.id);
+
 
 	// 检查目标项是否为文件夹
 	const isTargetFolder = targetItem.isFolder || targetItem.isFolder === true;
 
-	// 如果目标是文件夹，将拖动的项移动到该文件夹下
-	if (isTargetFolder) {
-		console.log('目标项是文件夹，移动到文件夹下');
+	// 如果目标是文件夹且没有明确的插入位置(before/after),则将拖动的项移动到该文件夹内
+	// 如果有明确的插入位置,则表示要在文件夹前后进行排序,而不是移入文件夹
+	if (isTargetFolder && !dragInsertPosition.value) {
+
 
 		// 检查是否试图将文件夹移动到自己的子文件夹中（防止循环）
 		if (draggedItemData.isFolder) {
@@ -1081,7 +1087,7 @@ async function handleDrop(event: DragEvent, targetItem: any) {
 		// 检查是否试图移动到自己的位置
 		const draggedParentId = String(draggedItemData.folderId || '0');
 		if (draggedParentId === targetFolderId) {
-			console.log('已经在目标文件夹中');
+
 			draggedItem.value = null;
 			return;
 		}
@@ -1123,14 +1129,14 @@ async function handleDrop(event: DragEvent, targetItem: any) {
 		return;
 	}
 
-	// 如果不是文件夹，执行原有的排序逻辑
+	// 其他情况:执行排序逻辑(包括文件夹与文件夹之间的排序、书签与书签之间的排序)
 	const draggedFolderId = String(draggedItemData.folderId || '0');
 	const targetFolderId = String(targetItem.folderId || '0');
-	console.log('检查文件夹:', { draggedFolderId, targetFolderId });
+
 
 	// 确保它们在同一个文件夹中才能排序
 	if (draggedFolderId !== targetFolderId) {
-		console.log('不在同一文件夹中');
+
 		ms.warning('只能在同一文件夹内拖拽排序');
 		draggedItem.value = null;
 		return;
@@ -1144,17 +1150,58 @@ async function handleDrop(event: DragEvent, targetItem: any) {
 	const draggedIndex = currentFolderItems.findIndex(item => String(item.id) === String(draggedItemData.id));
 	const targetIndex = currentFolderItems.findIndex(item => String(item.id) === String(targetItem.id));
 
-	console.log('项目索引:', { draggedIndex, targetIndex, folderItemsCount: currentFolderItems.length });
+
 
 	if (draggedIndex !== -1 && targetIndex !== -1) {
 		// 实现插入排序的逻辑
 		// 步骤1：获取当前文件夹的所有项目并按sort排序
 			const sortedFolderItems = [...currentFolderItems].sort((a, b) => (a.sort || 0) - (b.sort || 0));
-			
+
+
+			// !!! 新增: 检测并修复重复的sort值 !!!
+			const sortValues = sortedFolderItems.map(item => item.sort || 0);
+			const hasDuplicates = sortValues.some((val, idx) => sortValues.indexOf(val) !== idx);
+
+			if (hasDuplicates) {
+
+				
+				// 获取当前文件夹信息
+				const currentFolder = allFolders.value.find(folder => folder.value === draggedFolderId);
+				const parentUrlValue = currentFolder ? currentFolder.label : '';
+				
+				// 重新分配连续的sort值 (1, 2, 3...)
+				const normalizedItems = sortedFolderItems.map((item, index) => ({
+					id: Number(item.id),
+					title: item.title,
+					url: item.isFolder ? item.title : (item.url || ''),
+					parentUrl: parentUrlValue==="根目录"?"":parentUrlValue,
+					sort: index + 1, // 从1开始的连续值
+					lanUrl: (item as any).lanUrl || '',
+					openMethod: (item as any).openMethod || 0,
+					icon: (item as any).icon || null,
+					iconJson: item.iconJson || ''
+				}));
+
+
+
+				// 更新本地sort值
+				for (const normalizedItem of normalizedItems) {
+					const originalItem = sortedFolderItems.find(item => Number(item.id) === normalizedItem.id);
+					if (originalItem) {
+						originalItem.sort = normalizedItem.sort;
+					}
+				}
+
+				// 同步到服务器(异步,不阻塞拖动操作)
+				Promise.all(normalizedItems.map(item => update(item)))
+					.then(() => {})
+					.catch(err => console.error('✗ Sort值规范化同步失败:', err));
+			}
+
 			// 步骤2：找到拖拽项和目标项在排序后的索引
 			const sortedDraggedIndex = sortedFolderItems.findIndex(item => String(item.id) === String(draggedItemData.id));
 			const sortedTargetIndex = sortedFolderItems.findIndex(item => String(item.id) === String(targetItem.id));
-			
+
 			// 步骤3：根据插入位置确定新的索引
 			let newIndex;
 			if (dragInsertPosition.value === 'before') {
@@ -1165,27 +1212,30 @@ async function handleDrop(event: DragEvent, targetItem: any) {
 				// 默认行为 - 如果没有插入位置，则根据原始索引决定
 				newIndex = draggedIndex < targetIndex ? targetIndex : targetIndex + 1;
 			}
-			
+
 			// 步骤4：从排序数组中移除拖拽项并插入到新位置
 			const updatedItems = [...sortedFolderItems];
 			updatedItems.splice(sortedDraggedIndex, 1);
-			updatedItems.splice(newIndex, 0, draggedItemData);
-			
+			// 修正插入索引：如果新索引在拖拽项之后，需要减1（因为移除操作使后续项前移了）
+			const adjustedNewIndex = newIndex > sortedDraggedIndex ? newIndex - 1 : newIndex;
+			updatedItems.splice(adjustedNewIndex, 0, draggedItemData);
+
 			// 查找当前文件夹信息以获取parentUrl
 			const currentFolder = allFolders.value.find(folder => folder.value === draggedFolderId);
 			const parentUrlValue = currentFolder ? currentFolder.label : '';
-			
-			// 步骤5：确定需要更新的索引范围
+
+			// 步骤5：确定需要更新的索引范围（使用调整后的索引）
 			const originalIndex = sortedDraggedIndex;
-			const startUpdateIndex = Math.min(newIndex, originalIndex);
-			const endUpdateIndex = Math.max(newIndex, originalIndex);
-			
-			// 步骤6：仅更新受影响的项目的sort值
+			const startUpdateIndex = Math.min(adjustedNewIndex, originalIndex);
+			const endUpdateIndex = Math.max(adjustedNewIndex, originalIndex);
+
+			// 步骤6：更新受影响的项目的sort值
+			// 注意：现在updatedItems已经是重新排列后的数组，我们需要更新所有受影响项的sort值
 			const itemsToUpdate = updatedItems.slice(startUpdateIndex, endUpdateIndex + 1).map((item, offset) => ({
 				id: Number(item.id),
 				title: item.title,
 				url: item.isFolder ? item.title : (item.url || ''),
-				parentUrl: parentUrlValue,
+				parentUrl: parentUrlValue==="根目录"?"":parentUrlValue,
 				sort: startUpdateIndex + 1 + offset, // 新的sort值基于起始索引加偏移量
 				lanUrl: (item as any).lanUrl || '',
 				openMethod: (item as any).openMethod || 0,
@@ -1194,22 +1244,19 @@ async function handleDrop(event: DragEvent, targetItem: any) {
 			}));
 
 		try {
-			// 更新所有受影响的项目的排序值
-			for (const item of itemsToUpdate) {
-				await update(item);
-			}
+			// === 步骤1: 先立即更新本地UI,实现乐观更新 ===
 
-			// 更新本地数据以避免UI闪烁
-				const updateLocalItemSort = (itemId: number, newSort: number) => {
-					console.log('updateLocalItemSort called with:', itemId, newSort);
+			const updateLocalItemSort = (itemId: number, newSort: number) => {
+
 
 					// 递归更新fullData树形结构中的sort值
 					const updateFullDataSort = (nodes: any[]): boolean => {
 						for (let i = 0; i < nodes.length; i++) {
 							const node = nodes[i];
 							// 处理两种节点结构：直接有id的节点 和 id在bookmark属性内的节点
-							const nodeId = Number(node.id) || Number(node.bookmark?.id);
+							const nodeId = Number(node.id) || Number(node.key) || Number(node.bookmark?.id);
 							if (nodeId === itemId) {
+
 								// 根据节点类型更新sort值
 								if (node.bookmark) {
 									// bookmarkTree结构中的节点
@@ -1233,9 +1280,14 @@ async function handleDrop(event: DragEvent, targetItem: any) {
 					// 递归更新bookmarkTree结构中的sort值
 					const updateTreeSort = (nodes: any[]): boolean => {
 						for (const node of nodes) {
-							// 将node.bookmark.id转换为数字类型，确保与itemId比较正确
-							if (Number(node.bookmark?.id) === itemId) {
-								node.bookmark.sort = newSort;
+							// 处理两种节点结构：文件夹节点(使用node.id/node.key) 和 书签节点(使用node.bookmark.id)
+							const nodeId = Number(node.id) || Number(node.key) || Number(node.bookmark?.id);
+							if (nodeId === itemId) {
+
+								// 根据节点类型更新sort值
+								if (node.bookmark) {
+									node.bookmark.sort = newSort;
+								}
 								node.sort = newSort;
 								return true;
 							}
@@ -1246,13 +1298,12 @@ async function handleDrop(event: DragEvent, targetItem: any) {
 						return false;
 					};
 
-					// 执行更新
-					updateFullDataSort(fullData.value);
-					updateTreeSort(bookmarkTree.value);
+			// 执行更新
+			const foundInFullData = updateFullDataSort(fullData.value);
+			const foundInTree = updateTreeSort(bookmarkTree.value);
+			if (!foundInFullData && !foundInTree) {
 
-				// 强制更新响应式数据
-				fullData.value = [...fullData.value];
-				bookmarkTree.value = [...bookmarkTree.value];
+			}
 			};
 
 			// 更新所有项目的排序值
@@ -1260,143 +1311,46 @@ async function handleDrop(event: DragEvent, targetItem: any) {
 				updateLocalItemSort(Number(item.id), item.sort);
 			}
 
-			// 根据更新后的sort值重新排序fullData数组（顶层节点）
+			// 递归排序children数组的实际顺序，以及更新sort值
+			const sortAllChildren = (nodes: any[]) => {
+				for (const node of nodes) {
+					if (node.children?.length) {
+						// !!! 关键: 按sort值重新排序children数组 !!!
+						node.children.sort((a: any, b: any) => {
+							const aSort = a.bookmark?.sort || a.sort || 0;
+							const bSort = b.bookmark?.sort || b.sort || 0;
+							return aSort - bSort;
+						});
+						// 递归处理子节点
+						sortAllChildren(node.children);
+					}
+				}
+			};
+
+
+
+			// 同时排序根级节点
 			fullData.value.sort((a, b) => (a.sort || 0) - (b.sort || 0));
 
-			// 递归排序fullData中所有节点的子节点
-			const sortAllChildrenInFullData = (nodes: any[]) => {
-				for (const node of nodes) {
-					if (node.children?.length) {
-						// 按sort值升序排序子节点，考虑bookmark属性内的sort值
-						node.children.sort((a: any, b: any) => {
-							const aSort = a.bookmark?.sort || a.sort || 0;
-							const bSort = b.bookmark?.sort || b.sort || 0;
-							return aSort - bSort;
-						});
-						// 更新排序后的子节点的sort字段
-						node.children.forEach((child: any, index: number) => {
-							if (child.bookmark) {
-								child.bookmark.sort = index;
-								child.sort = index;
-							} else {
-								child.sort = index;
-							}
-							// 更新rawNode.sort，确保缓存时能保存正确的排序值
-							if (child.rawNode) {
-								child.rawNode.sort = index;
-							}
-						});
-						// 递归处理子节点的子节点
-						sortAllChildrenInFullData(node.children);
-					}
-				}
-			};
 
-			// 递归排序bookmarkTree中所有节点的子节点
-			const sortAllChildrenInBookmarkTree = (nodes: any[]) => {
-				for (const node of nodes) {
-					if (node.children?.length) {
-						// 按sort值升序排序子节点，考虑bookmark属性内的sort值
-						node.children.sort((a: any, b: any) => {
-							const aSort = a.bookmark?.sort || a.sort || 0;
-							const bSort = b.bookmark?.sort || b.sort || 0;
-							return aSort - bSort;
-						});
-						// 更新排序后的子节点的sort字段
-						node.children.forEach((child: any, index: number) => {
-							if (child.bookmark) {
-								child.bookmark.sort = index;
-								child.sort = index;
-								if (child.rawNode) {
-									child.rawNode.sort = index;
-								}
-							} else {
-								child.sort = index;
-								if (child.rawNode) {
-									child.rawNode.sort = index;
-								}
-							}
-						});
-						// 递归处理子节点的子节点
-						sortAllChildrenInBookmarkTree(node.children);
-					}
-				}
-			};
 
 			// 执行递归排序
-			sortAllChildrenInFullData(fullData.value);
-			sortAllChildrenInBookmarkTree(bookmarkTree.value);
+			sortAllChildren(fullData.value);
+			sortAllChildren(bookmarkTree.value);
 
-			// 找到父节点并重新排序其子节点，确保树结构更新
-			const findParentNode = (nodes: any[], itemId: number): any | null => {
-				for (const node of nodes) {
-					// 将child.bookmark.id转换为数字类型，确保与itemId比较正确
-					if (node.children?.some((child: any) => Number(child.bookmark?.id) === itemId)) {
-						return node;
-					}
-					if (node.children?.length) {
-						const parent = findParentNode(node.children, itemId);
-						if (parent) return parent;
-					}
-				}
-				return null;
-			};
+			// !!! 关键: 创建新的数组引用来触发Vue响应式更新 !!!
+			// 这会触发 allItems 计算属性重新计算,然后 filteredBookmarks 也会重新计算
+			fullData.value = [...fullData.value];
+			bookmarkTree.value = [...bookmarkTree.value];
 
-			// 找到父节点并重新排序其子节点
-			const updateParentNodeChildrenOrder = (parentNode: any) => {
-				if (parentNode && parentNode.children?.length) {
-					// 按sort属性升序排序子节点
-					parentNode.children.sort((a: any, b: any) => {
-						const aSort = a.bookmark?.sort || a.sort || 0;
-						const bSort = b.bookmark?.sort || b.sort || 0;
-						return aSort - bSort;
-					});
-					// 更新排序后的子节点的sort字段
-					parentNode.children.forEach((child: any, index: number) => {
-						if (child.bookmark) {
-							child.bookmark.sort = index;
-							child.sort = index;
-						} else {
-							child.sort = index;
-						}
-					});
-					// 强制更新树结构响应式
-					bookmarkTree.value = [...bookmarkTree.value];
-				}
-			};
 
-			// 同时检查拖拽项和目标项的父节点，确保两边的树结构都正确更新
-			const draggedParent = findParentNode(bookmarkTree.value, Number(draggedItemData.id));
-			const targetParent = findParentNode(bookmarkTree.value, Number(targetItem.id));
-
-			if (draggedParent) {
-				updateParentNodeChildrenOrder(draggedParent);
-			}
-			if (targetParent && targetParent !== draggedParent) {
-				updateParentNodeChildrenOrder(targetParent);
-			}
-
-			// 重新排序当前文件夹项目以即时更新UI
-			console.log('Filtering items for folder:', draggedFolderId);
-			const currentFolderItems = [...allItems.value.filter(item =>
-				String(item.folderId || '0') === draggedFolderId
-			)].sort((a, b) => (a.sort || 0) - (b.sort || 0));
-			console.log('Sorted folder items:', currentFolderItems);
-
-			// 更新sortedItems以立即反映新的顺序
-			sortedItems.value = [...currentFolderItems];
-			console.log('Updated sortedItems:', sortedItems.value);
-
-			console.log('=== 本地数据更新完成 ===')
 
 			// 更新缓存数据
 			const folderTreeData = filterFoldersOnly(bookmarkTree.value);
 			const safeFolderTreeData = Array.isArray(folderTreeData) ? folderTreeData : [];
 
 			// 调试：检查数据是否正确更新
-			console.log('=== 更新缓存前 ===');
-			console.log('fullData.value:', fullData.value);
-			console.log('folderTreeData:', folderTreeData);
+
 
 			// Helper function to process nodes recursively for cache
 				const processCacheNode = (node: TreeOption) => {
@@ -1406,45 +1360,61 @@ async function handleDrop(event: DragEvent, targetItem: any) {
 					// Process the current node
 					const processedNode: TreeOption = {
 						...node,
-						isFolder: node.isFolder, // Keep as boolean (TreeOption interface requires boolean)
-						ParentUrl: parentUrl.toString(), // Convert to string and add to TreeOption
-						children: node.children || [] // Ensure children exists
+						isFolder: node.isFolder,
+						ParentUrl: parentUrl.toString(),
+						children: [] // 先设置为空数组
 					};
 
-					// Recursively process children
-					if (processedNode.children.length > 0) {
-						processedNode.children = processedNode.children.map((child: TreeOption) => processCacheNode(child));
+					// Recursively process children - 保持原始顺序
+					if (node.children && node.children.length > 0) {
+						// !!! 关键: 按顺序遍历children,保持已排好序的顺序 !!!
+						processedNode.children = node.children.map((child: TreeOption) => processCacheNode(child));
 					}
 
 					return processedNode;
 				};
 
+
+
 			// 存储完整的书签树数据（包含排序信息）到缓存，使用与页面加载一致的格式
-			ss.set(BOOKMARKS_CACHE_KEY, fullData.value.map(processCacheNode));
+			const processedCache = fullData.value.map(processCacheNode);
+			ss.set(BOOKMARKS_CACHE_KEY, processedCache);
 			// 存储文件夹树结构到缓存
 			ss.set(BOOKMARKS_FULL_CACHE_KEY, safeFolderTreeData);
 
 			// 调试：检查缓存是否正确存储
-			console.log('BOOKMARKS_CACHE_KEY 缓存:', ss.get(BOOKMARKS_CACHE_KEY));
+
 						// 存储文件夹树结构到缓存
 						ss.set(BOOKMARKS_FULL_CACHE_KEY, safeFolderTreeData);
 
 						// 调试：检查缓存是否正确存储
-						console.log('BOOKMARKS_CACHE_KEY 缓存:', ss.get(BOOKMARKS_CACHE_KEY));
-						console.log('BOOKMARKS_FULL_CACHE_KEY 缓存:', ss.get(BOOKMARKS_FULL_CACHE_KEY));
-			console.log('=== 缓存更新完成 ===');
+
+
+			// === 步骤2: 异步同步到服务器 ===
+
+			// 在后台异步更新服务器,不阻塞UI
+			Promise.all(itemsToUpdate.map(item => update(item)))
+				.then(() => {
+
+				})
+				.catch((error) => {
+					console.error('服务器同步失败,回滚本地数据:', error);
+					ms.error('排序保存失败,已恢复');
+					// 同步失败时,从服务器重新拉取数据
+					refreshBookmarks(true);
+				});
 		} catch (error) {
-			console.error('更新失败:', error);
-			await refreshBookmarks(true);
+			console.error('本地更新失败:', error);
+			ms.error('排序更新失败');
 		}
 	} else {
-		console.log('在当前文件夹中找不到拖拽项或目标项');
+
 		ms.warning('排序更新失败：找不到相关项目');
 	}
 
 	// 重置拖拽状态
 	draggedItem.value = null;
-	console.log('=== handleDrop 结束 ===');
+
 }
 
 // 处理编辑书签
@@ -1808,9 +1778,6 @@ function filterFoldersOnly(nodes: TreeOption[]): TreeOption[] {
 		return [];
 	}
 
-	// 调试信息：查看输入节点
-	console.log('filterFoldersOnly - Input nodes:', nodes);
-
 	const result: TreeOption[] = [];
 	for (const node of nodes) {
 		if (node && node.isFolder) {
@@ -1923,7 +1890,7 @@ if (Array.isArray(folderTreeData) && folderTreeData.length > 0) {
 		}
 
 		// 缓存不存在或强制刷新时从服务器获取数据
-console.log('未找到有效缓存数据或强制刷新，从服务器获取');
+
 const response = await getBookmarksList();
 if (response.code === 0) {
 	// 后端返回格式为 { data: { list: [], count: number }, code: 0, msg: "" }
@@ -1947,11 +1914,11 @@ if (response.code === 0) {
 	// 检查是否已经是树形结构（直接包含children字段）
 	if (serverBookmarks.length > 0 && 'children' in serverBookmarks[0]) {
 		// 已经是树形结构，转换为前端需要的格式
-		console.log('处理已有的树形结构数据');
+
 		treeDataResult = convertServerTreeToFrontendTree(serverBookmarks);
 	} else {
 		// 构建树形结构
-		console.log('从列表构建树形结构');
+
 		treeDataResult = buildBookmarkTree(serverBookmarks);
 	}
 
@@ -2416,7 +2383,7 @@ function updateCacheAfterDelete(bookmarkId: number, isFolder: boolean) {
 		// 收集所有需要删除的ID（包括文件夹下的所有子项）
 		const collectAllIdsToDelete = (nodes: any[], targetId: number): number[] => {
 			const idsToDelete: number[] = [];
-			
+
 			// 查找目标节点（支持id和key匹配）
 			const findNode = (nodeList: any[]): any => {
 				for (const node of nodeList) {
@@ -2431,17 +2398,17 @@ function updateCacheAfterDelete(bookmarkId: number, isFolder: boolean) {
 				}
 				return null;
 			};
-			
+
 			const targetNode = findNode(nodes);
 			if (!targetNode) {
-				console.warn('未找到要删除的节点:', bookmarkId, '缓存数据:', cacheList);
+
 				return idsToDelete;
 			}
-			
+
 			// 添加目标节点ID
 			const targetNodeId = Number(targetNode.id || targetNode.key || bookmarkId);
 			idsToDelete.push(targetNodeId);
-			
+
 			// 如果是文件夹，递归收集所有子项ID
 			if ((targetNode.isFolder === 1 || targetNode.isFolder === true) && targetNode.children && targetNode.children.length > 0) {
 				const collectChildrenIds = (children: any[]) => {
@@ -2458,20 +2425,20 @@ function updateCacheAfterDelete(bookmarkId: number, isFolder: boolean) {
 				};
 				collectChildrenIds(targetNode.children);
 			}
-			
+
 			return idsToDelete;
 		};
-		
+
 		// 收集所有需要删除的ID
 		const idsToDelete = collectAllIdsToDelete(cacheList, bookmarkId);
-		console.log('要删除的ID列表:', idsToDelete, '目标ID:', bookmarkId);
-		
+
+
 		if (idsToDelete.length === 0) {
-			console.warn('未找到要删除的节点，刷新数据');
+
 			refreshBookmarks(false);
 			return;
 		}
-		
+
 		// 递归删除函数（删除指定ID的节点，支持id和key匹配）
 		const deleteNodeById = (nodes: any[], id: number): boolean => {
 			for (let i = 0; i < nodes.length; i++) {
@@ -2491,22 +2458,16 @@ function updateCacheAfterDelete(bookmarkId: number, isFolder: boolean) {
 
 		// 删除所有收集到的节点（按ID从大到小排序，先删除子项再删除父项）
 		const sortedIds = [...idsToDelete].sort((a, b) => b - a);
-		let deletedCount = 0;
 		for (const id of sortedIds) {
-			const deleted = deleteNodeById(cacheList, id);
-			if (deleted) {
-				deletedCount++;
-			} else {
-				console.warn('删除节点失败，ID:', id);
-			}
+			deleteNodeById(cacheList, id);
 		}
-		
-		console.log('成功删除节点数:', deletedCount, '/', sortedIds.length);
+
+
 
 		// 更新缓存
 		ss.set(BOOKMARKS_CACHE_KEY, cacheList);
-		console.log('缓存已更新，剩余节点数:', cacheList.length);
-		
+
+
 		// 重新构建树并更新UI
 		const treeDataResult = convertServerTreeToFrontendTree(cacheList);
 		fullData.value = treeDataResult;
