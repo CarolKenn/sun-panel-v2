@@ -236,7 +236,7 @@ function convertServerTreeToFrontendTree(serverTree: any[]): any[] {
     // 1. 服务器原始数据格式 (id, title, isFolder, url, iconJson)
     // 2. 前端节点格式 (key, label, isFolder, bookmark)
     const isFrontendFormat = node.hasOwnProperty('key') && node.hasOwnProperty('label');
-    
+
     // 提取基本属性
     const nodeId = isFrontendFormat ? node.key : node.id;
     const title = isFrontendFormat ? node.label : node.title;
@@ -355,7 +355,7 @@ function buildBookmarkTree(bookmarks: any[]): any[] {
     const stringFolderId = String(folderId);
     // 获取排序字段
     const sortOrder = isFrontendFormat ? (item.rawNode?.sort || 0) : (item.sort || 0);
-    
+
     let targetFolder;
 
     if (stringFolderId === '0' || stringFolderId === 'null' || stringFolderId === 'undefined') {
@@ -503,7 +503,7 @@ function filterItemsByNetworkMode() {
     // 过滤掉没有项目的组
     filterItems.value = filteredGroups.filter(group => !group.items || group.items.length > 0)
   } else {
-    // 内网模式下显示所有项目
+    // 私密模式下显示所有项目
     filterItems.value = items.value
   }
 }
@@ -600,9 +600,9 @@ async function updateItemIconGroupByNet(itemIconGroupIndex: number, itemIconGrou
       const allGroupsLoaded = items.value.every(group => group.items !== undefined)
       if (allGroupsLoaded) {
         filterItemsByNetworkMode()
-      } 
-    } 
-  } 
+      }
+    }
+  }
 }
 
 // 组件激活时刷新书签数据确保显示最新顺序
@@ -693,17 +693,17 @@ function handleEditSuccess(item: Panel.ItemInfo) {
   getList()
 }
 
-function handleChangeNetwork(mode: PanelStateNetworkModeEnum) {
-  panelState.setNetworkMode(mode)
-  if (mode === PanelStateNetworkModeEnum.lan)
-    ms.success(t('panelHome.changeToLanModelSuccess'))
-
-  else
-    ms.success(t('panelHome.changeToWanModelSuccess'))
-
-  // 切换网络模式后，重新应用过滤
-  filterItemsByNetworkMode()
-}
+// function handleChangeNetwork(mode: PanelStateNetworkModeEnum) {
+//   panelState.setNetworkMode(mode)
+//   if (mode === PanelStateNetworkModeEnum.lan)
+//     ms.success(t('panelHome.changeToLanModelSuccess'))
+//
+//   else
+//     ms.success(t('panelHome.changeToWanModelSuccess'))
+//
+//   // 切换网络模式后，重新应用过滤
+//   filterItemsByNetworkMode()
+// }
 
 
 function handleSaveSort(itemGroup: ItemGroup) {
@@ -778,6 +778,11 @@ onMounted(async () => {
   // 设置标题
   if (panelState.panelConfig.logoText)
     setTitle(panelState.panelConfig.logoText)
+
+  // 确保公开模式下始终使用公网模式
+  if (authStore.visitMode === VisitMode.VISIT_MODE_PUBLIC) {
+    panelState.setNetworkMode(PanelStateNetworkModeEnum.wan)
+  }
 
   // 加载书签数据，使用forceRefresh=true确保获取最新排序
   await loadBookmarkTree(false)
@@ -894,6 +899,84 @@ console.error('渲染树节点标签时出错:', error);
 return h('span', {}, displayText);
 }
 };
+
+// 网络模式切换处理
+function handleChangeNetwork(targetMode: PanelStateNetworkModeEnum) {
+  // 从公网模式切换到私密模式需要验证密码
+  if (panelState.networkMode === PanelStateNetworkModeEnum.wan && targetMode === PanelStateNetworkModeEnum.lan) {
+    // 显示密码输入对话框
+    const passwordInput = ref('')
+
+    dialog.create({
+      title: t('panelHome.verifyPassword'),
+      content: () => h('div', { class: 'mt-4' }, [
+        h('div', { class: 'mb-2 text-sm text-gray-600 dark:text-gray-400' }, t('panelHome.enterPasswordToSwitchLan')),
+        h('input', {
+          type: 'password',
+          class: 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white',
+          placeholder: t('common.password'),
+          value: passwordInput.value,
+          onInput: (e: Event) => {
+            passwordInput.value = (e.target as HTMLInputElement).value
+          },
+          onKeydown: (e: KeyboardEvent) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              // 触发确定按钮
+              const positiveButton = document.querySelector('.n-dialog__action button:last-child') as HTMLButtonElement
+              if (positiveButton) positiveButton.click()
+            }
+          }
+        })
+      ]),
+      positiveText: t('common.confirm'),
+      negativeText: t('common.cancel'),
+      onPositiveClick: async () => {
+        if (!passwordInput.value) {
+          ms.warning(t('panelHome.passwordRequired'))
+          return false // 阻止对话框关闭
+        }
+
+        try {
+          // 验证密码 - 调用登录接口验证
+          const response = await fetch('/api/login', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              username: authStore.userInfo?.username,
+              password: passwordInput.value,
+            }),
+          })
+
+          const result = await response.json()
+
+          if (result.code === 0) {
+            // 密码正确,切换模式
+            panelState.setNetworkMode(targetMode)
+            ms.success(t('panelHome.changeToLanModelSuccess'))
+            return true
+          } else {
+            // 密码错误
+            ms.error(t('panelHome.passwordIncorrect'))
+            return false // 阻止对话框关闭
+          }
+        } catch (error) {
+          console.error('验证密码失败:', error)
+          ms.error(t('common.networkError'))
+          return false
+        }
+      },
+    })
+  } else {
+    // 从内网切换到公网,或其他情况,直接切换
+    panelState.setNetworkMode(targetMode)
+    if (targetMode === PanelStateNetworkModeEnum.wan) {
+      ms.success(t('panelHome.changeToWanModelSuccess'))
+    }
+  }
+}
 </script>
 
 <template>
@@ -1129,7 +1212,7 @@ return h('span', {}, displayText);
       <NButtonGroup vertical>
         <!-- 网络模式切换按钮组 -->
         <NButton
-          v-if="panelState.networkMode === PanelStateNetworkModeEnum.lan && panelState.panelConfig.netModeChangeButtonShow" color="#2a2a2a6b"
+          v-if="panelState.networkMode === PanelStateNetworkModeEnum.lan && panelState.panelConfig.netModeChangeButtonShow && authStore.visitMode === VisitMode.VISIT_MODE_LOGIN" color="#2a2a2a6b"
           :title="t('panelHome.changeToWanModel')" @click="handleChangeNetwork(PanelStateNetworkModeEnum.wan)"
         >
           <template #icon>
@@ -1138,7 +1221,7 @@ return h('span', {}, displayText);
         </NButton>
 
         <NButton
-          v-if="panelState.networkMode === PanelStateNetworkModeEnum.wan && panelState.panelConfig.netModeChangeButtonShow" color="#2a2a2a6b"
+          v-if="panelState.networkMode === PanelStateNetworkModeEnum.wan && panelState.panelConfig.netModeChangeButtonShow && authStore.visitMode === VisitMode.VISIT_MODE_LOGIN" color="#2a2a2a6b"
           :title="t('panelHome.changeToLanModel')" @click="handleChangeNetwork(PanelStateNetworkModeEnum.lan)"
         >
           <template #icon>

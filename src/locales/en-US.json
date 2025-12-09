@@ -301,7 +301,12 @@
     "changeToWanModelSuccess": "Switched to WAN mode (mode status saved locally)",
     "goToLogin": "Go to login",
     "openLanUrl": "Open LAN URL",
-    "openWanUrl": "Open WAN URL"
+    "openWanUrl": "Open WAN URL",
+    "refreshData": "Refresh data",
+    "verifyPassword": "Verify Password",
+    "enterPasswordToSwitchLan": "Please enter your login password to switch to private mode",
+    "passwordRequired": "Please enter password",
+    "passwordIncorrect": "Incorrect password"
   },
   "settingUserInfo": {
     "confirmLogoutText": "Are you sure you want to logout?",

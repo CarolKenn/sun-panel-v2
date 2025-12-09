@@ -282,7 +282,7 @@
     "inputIconName": "请输入图标名称",
     "inputIconUrlOrUpload": "输入图标地址或上传",
     "lanUrl": "内网地址",
-    "lanUrlInputPlaceholder": "http(s)://（内网模式，会跳转该地址）",
+    "lanUrlInputPlaceholder": "http(s)://（私密模式，会跳转该地址）",
     "newWindowOpen": "新窗口打开",
     "onlineIcon": "在线图标",
     "onlineIconLibrary": "在线图标库",
@@ -298,14 +298,18 @@
     "welcomeMessage": "欢迎回来！"
   },
   "panelHome": {
-    "changeToLanModel": "切换为内网模式",
-    "changeToLanModelSuccess": "已经切换到内网模式（模式状态仅保存在本地）",
+    "changeToLanModel": "切换为私密模式",
+    "changeToLanModelSuccess": "已经切换到私密模式（模式状态仅保存在本地）",
     "changeToWanModel": "切换为公网模式",
     "changeToWanModelSuccess": "已经切换到公网模式（模式状态仅保存在本地）",
     "goToLogin": "前往登录",
     "openLanUrl": "打开局域网地址",
     "openWanUrl": "打开公网地址",
-    "refreshData": "刷新数据"
+    "refreshData": "刷新数据",
+    "verifyPassword": "验证密码",
+    "enterPasswordToSwitchLan": "请输入登录密码以切换到私密模式",
+    "passwordRequired": "请输入密码",
+    "passwordIncorrect": "密码错误"
   },
   "settingUserInfo": {
     "confirmLogoutText": "你确定要退出登录吗？",
