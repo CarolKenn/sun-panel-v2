@@ -1,10 +1,10 @@
 # build frontend
-FROM node:18-alpine AS web_image
+# 与 CI 工作流保持一致：工作流用 Node 22.10.0 + npm 验证过构建，这里复用同一个版本
+ARG NODE_VERSION=22
+FROM node:${NODE_VERSION}-alpine AS web_image
 
 # 使用淘宝npm镜像源加速依赖安装
 RUN npm config set registry https://registry.npmmirror.com
-
-RUN npm install pnpm -g
 
 WORKDIR /build
 
@@ -12,10 +12,17 @@ WORKDIR /build
 COPY . /build
 
 # 安装依赖
-RUN pnpm install
+# 这里用 npm ci（依据 package-lock.json）而不是 pnpm，原因：
+#   1) 仓库里的 pnpm-lock.yaml 是 lockfileVersion 6.0，且缺少 @vicons/ionicons5，
+#      与 package.json 已不同步，pnpm 无法 --frozen-lockfile；
+#   2) `npm install pnpm -g` 装到的是 pnpm 10（只支持 lockfileVersion 9.x），
+#      会忽略旧锁文件重新解析依赖，再因默认拦截依赖的构建脚本报
+#      ERR_PNPM_IGNORED_BUILDS，导致 `pnpm install` 直接失败。
+# package-lock.json 覆盖了全部 40 个依赖且已被 CI 的 `npm ci` 验证通过。
+RUN npm ci --no-audit --no-fund
 
 # 构建项目
-RUN pnpm run build
+RUN npm run build
 
 # build backend
 # 最新alpine3.19导致sqlite3编译失败(https://github.com/mattn/go-sqlite3/issues/1164，
