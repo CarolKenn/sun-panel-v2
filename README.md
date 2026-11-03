@@ -60,9 +60,3 @@ services:
 
 
 
-<img height="300" src="./doc/images/donate/weixin.png"/>
-
-
----
-
-[![Star History Chart](https://api.star-history.com/svg?repos=hslr-s/sun-panel&type=Date)](https://star-history.com/#hslr-s/sun-panel&Date)
