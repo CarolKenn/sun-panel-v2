@@ -10,4 +10,5 @@ type ApiSystem struct {
 	MonitorApi       MonitorApi
 	SystemSettingApi SystemSettingApi
 	Ping             Ping
+	BackupApi        BackupApi
 }

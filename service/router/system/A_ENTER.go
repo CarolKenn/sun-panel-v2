@@ -12,4 +12,5 @@ func Init(routerGroup *gin.RouterGroup) {
 	InitMonitorRouter(routerGroup)
 	InitSystemSettingRouter(routerGroup)
 	InitPingRouter(routerGroup)
+	InitBackupRouter(routerGroup)
 }

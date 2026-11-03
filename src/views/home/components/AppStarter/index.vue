@@ -60,6 +60,12 @@ const apps = ref<App[]>([
     auth: 1, // 只有管理员可见
   },
   {
+    name: t('apps.backup.appName'),
+    componentName: 'Backup',
+    icon: 'lucide-database-backup',
+    auth: 1, // 只有管理员可见
+  },
+  {
     name: t('apps.about.appName'),
     componentName: 'About',
     icon: 'lucide-info',
