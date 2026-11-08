@@ -26,12 +26,21 @@ type BackupApi struct {
 // Info 当前数据概览：各表行数、附件数量与体积
 func (a *BackupApi) Info(c *gin.Context) {
 	sourcePath := global.Config.GetValueString("base", "source_path")
-	info, err := backup.GetInfo(sourcePath)
+	info, err := backup.GetInfo(sourcePath, uploadTempDir())
 	if err != nil {
 		apiReturn.ErrorDatabase(c, err.Error())
 		return
 	}
 	apiReturn.SuccessData(c, info)
+}
+
+// uploadTempDir 上传临时目录。它通常是 source_path 的子目录，
+// 统计与打包时都要排除，否则会把上传中断残留的临时文件算进去。
+func uploadTempDir() []string {
+	if p := global.Config.GetValueString("base", "source_temp_path"); p != "" {
+		return []string{p}
+	}
+	return nil
 }
 
 // Export 导出全站数据为 zip（含附件可选）
@@ -63,6 +72,7 @@ func (a *BackupApi) Export(c *gin.Context) {
 	if err := backup.Export(c.Writer, backup.ExportOptions{
 		IncludeUploads: req.IncludeUploads,
 		UploadsDir:     sourcePath,
+		ExcludeDirs:    uploadTempDir(),
 	}); err != nil {
 		global.Logger.Errorf("导出备份失败: %v", err)
 	}

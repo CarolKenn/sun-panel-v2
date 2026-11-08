@@ -49,17 +49,47 @@ func (a *ItemIcon) Edit(c *gin.Context) {
 
 	if req.ID != 0 {
 		// 修改
+		// 越权防护：必须同时限定 user_id。此前只按 id 更新，任何登录用户
+		// 只要猜到别人的记录 id，就能改掉内容并把 user_id 改成自己（等于抢走数据）
+		var owned int64
+		if err := global.Db.Model(&models.ItemIcon{}).
+			Where("id=? AND user_id=?", req.ID, userInfo.ID).Count(&owned).Error; err != nil {
+			apiReturn.ErrorDatabase(c, err.Error())
+			return
+		}
+		if owned == 0 {
+			apiReturn.ErrorNoAccess(c)
+			return
+		}
+
+		// 目标分组也必须属于当前用户
+		if err := global.Db.Model(&models.ItemIconGroup{}).
+			Where("id=? AND user_id=?", req.ItemIconGroupId, userInfo.ID).Count(&owned).Error; err != nil {
+			apiReturn.ErrorDatabase(c, err.Error())
+			return
+		}
+		if owned == 0 {
+			apiReturn.ErrorParamFomat(c, "Group not found")
+			return
+		}
+
 		updateField := []string{"IconJson", "Icon", "Title", "Url", "LanUrl", "Description", "OpenMethod", "GroupId", "UserId", "ItemIconGroupId", "LanOnly"}
 		if req.Sort != 0 {
 			updateField = append(updateField, "Sort")
 		}
-		global.Db.Model(&models.ItemIcon{}).
+		if err := global.Db.Model(&models.ItemIcon{}).
 			Select(updateField).
-			Where("id=?", req.ID).Updates(&req)
+			Where("id=? AND user_id=?", req.ID, userInfo.ID).Updates(&req).Error; err != nil {
+			apiReturn.ErrorDatabase(c, err.Error())
+			return
+		}
 	} else {
 		req.Sort = 9999
 		// 创建
-		global.Db.Create(&req)
+		if err := global.Db.Create(&req).Error; err != nil {
+			apiReturn.ErrorDatabase(c, err.Error())
+			return
+		}
 	}
 
 	apiReturn.SuccessData(c, req)

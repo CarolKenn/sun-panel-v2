@@ -223,7 +223,8 @@ func (a UsersApi) GetList(c *gin.Context) {
 		db = db.Where("name LIKE ? OR username LIKE ?", "%"+param.Keyword+"%", "%"+param.Keyword+"%")
 	}
 
-	if err := db.Omit("Password").Limit(param.Limit).Offset((param.Page - 1) * param.Limit).Find(&list).Limit(-1).Offset(-1).Count(&count).Error; err != nil {
+	// 密码哈希和登录 token 都不能下发到前端（token 等于长期凭证）
+	if err := db.Omit("Password", "Token").Limit(param.Limit).Offset((param.Page - 1) * param.Limit).Find(&list).Limit(-1).Offset(-1).Count(&count).Error; err != nil {
 		apiReturn.ErrorDatabase(c, err.Error())
 		return
 	}

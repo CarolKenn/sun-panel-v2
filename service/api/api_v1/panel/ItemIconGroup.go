@@ -29,16 +29,34 @@ func (a *ItemIconGroup) Edit(c *gin.Context) {
 
 	if req.ID != 0 {
 		// 修改
+		// 越权防护：限定 user_id，否则猜到 id 即可改别人的分组并抢占归属
+		var owned int64
+		if err := global.Db.Model(&models.ItemIconGroup{}).
+			Where("id=? AND user_id=?", req.ID, userInfo.ID).Count(&owned).Error; err != nil {
+			apiReturn.ErrorDatabase(c, err.Error())
+			return
+		}
+		if owned == 0 {
+			apiReturn.ErrorNoAccess(c)
+			return
+		}
+
 		updateField := []string{"IconJson", "Icon", "Title", "Url", "LanUrl", "Description", "OpenMethod", "GroupId", "UserId"}
 		if req.Sort != 0 {
 			updateField = append(updateField, "Sort")
 		}
-		global.Db.Model(&models.ItemIconGroup{}).
+		if err := global.Db.Model(&models.ItemIconGroup{}).
 			Select(updateField).
-			Where("id=?", req.ID).Updates(&req)
+			Where("id=? AND user_id=?", req.ID, userInfo.ID).Updates(&req).Error; err != nil {
+			apiReturn.ErrorDatabase(c, err.Error())
+			return
+		}
 	} else {
 		// 创建
-		global.Db.Create(&req)
+		if err := global.Db.Create(&req).Error; err != nil {
+			apiReturn.ErrorDatabase(c, err.Error())
+			return
+		}
 	}
 
 	apiReturn.SuccessData(c, req)

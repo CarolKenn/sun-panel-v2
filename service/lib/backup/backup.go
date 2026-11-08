@@ -110,6 +110,10 @@ type Info struct {
 type ExportOptions struct {
 	IncludeUploads bool
 	UploadsDir     string
+	// ExcludeDirs 需要跳过的子目录。
+	// 典型场景：source_temp_path 默认是 source_path/temp，属于上传临时目录，
+	// 上传中断后会残留半截文件，不应被打进备份包。
+	ExcludeDirs []string
 }
 
 type tableSpec struct {
@@ -166,7 +170,7 @@ func Export(w io.Writer, opt ExportOptions) error {
 	}
 
 	if opt.IncludeUploads && opt.UploadsDir != "" {
-		if err := addUploads(zw, opt.UploadsDir, &mf.Warnings); err != nil {
+		if err := addUploads(zw, opt.UploadsDir, opt.ExcludeDirs, &mf.Warnings); err != nil {
 			_ = zw.Close()
 			return fmt.Errorf("打包附件失败: %w", err)
 		}
@@ -204,8 +208,8 @@ func writeJSONEntry(zw *zip.Writer, name string, v interface{}) error {
 	return enc.Encode(v)
 }
 
-// addUploads 把附件目录递归写入 zip
-func addUploads(zw *zip.Writer, dir string, warnings *[]string) error {
+// addUploads 把附件目录递归写入 zip，跳过 excludeDirs 指定的子目录
+func addUploads(zw *zip.Writer, dir string, excludeDirs []string, warnings *[]string) error {
 	absDir, err := filepath.Abs(dir)
 	if err != nil {
 		return err
@@ -217,11 +221,19 @@ func addUploads(zw *zip.Writer, dir string, warnings *[]string) error {
 		}
 		return err
 	}
+	excludes := toAbsDirs(excludeDirs)
 
 	var total int64
 	return filepath.Walk(absDir, func(p string, fi os.FileInfo, walkErr error) error {
 		if walkErr != nil {
 			*warnings = append(*warnings, "跳过无法读取的附件: "+p)
+			return nil
+		}
+		// 临时目录整棵子树都跳过
+		if isExcludedDir(p, excludes) {
+			if fi.IsDir() {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		if fi.IsDir() || !fi.Mode().IsRegular() {
@@ -534,7 +546,7 @@ func extractUploads(index map[string]*zip.File, destDir string) (int, []string, 
 // ----------------------------------------------------------------------------
 
 // GetInfo 统计当前数据量，用于前端展示
-func GetInfo(uploadsDir string) (*Info, error) {
+func GetInfo(uploadsDir string, excludeDirs []string) (*Info, error) {
 	info := &Info{
 		AppVersion: cmn.GetSysVersionInfo().Version,
 		DbDriver:   string(global.DB_DRIVER),
@@ -551,9 +563,16 @@ func GetInfo(uploadsDir string) (*Info, error) {
 	}
 
 	if uploadsDir != "" {
+		excludes := toAbsDirs(excludeDirs)
 		if abs, err := filepath.Abs(uploadsDir); err == nil {
-			_ = filepath.Walk(abs, func(_ string, fi os.FileInfo, err error) error {
-				if err != nil || fi == nil || fi.IsDir() {
+			_ = filepath.Walk(abs, func(p string, fi os.FileInfo, err error) error {
+				if err != nil || fi == nil {
+					return nil
+				}
+				if isExcludedDir(p, excludes) && fi.IsDir() {
+					return filepath.SkipDir
+				}
+				if fi.IsDir() {
 					return nil
 				}
 				info.UploadsCount++
@@ -564,6 +583,34 @@ func GetInfo(uploadsDir string) (*Info, error) {
 	}
 
 	return info, nil
+}
+
+// toAbsDirs 把目录列表转成绝对路径，用于前缀比较
+func toAbsDirs(dirs []string) []string {
+	out := make([]string, 0, len(dirs))
+	for _, d := range dirs {
+		if d == "" {
+			continue
+		}
+		if abs, err := filepath.Abs(d); err == nil {
+			out = append(out, abs)
+		}
+	}
+	return out
+}
+
+// isExcludedDir 判断路径是否落在被排除的目录（含其子目录）内
+func isExcludedDir(p string, excludes []string) bool {
+	if len(excludes) == 0 {
+		return false
+	}
+	clean := filepath.Clean(p)
+	for _, ex := range excludes {
+		if clean == ex || strings.HasPrefix(clean, ex+string(os.PathSeparator)) {
+			return true
+		}
+	}
+	return false
 }
 
 // FlushCaches 恢复后清空内存缓存，避免读到旧配置与旧登录态

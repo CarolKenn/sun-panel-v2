@@ -110,8 +110,9 @@ func (a *FileApi) GetList(c *gin.Context) {
 
 	data := []map[string]interface{}{}
 	for _, v := range list {
+		// 老数据里 src 可能是空串，直接 v.Src[1:] 会切片越界 panic
 		data = append(data, map[string]interface{}{
-			"src":        v.Src[1:],
+			"src":        strings.TrimPrefix(v.Src, "/"),
 			"fileName":   v.FileName,
 			"id":         v.ID,
 			"createTime": v.CreatedAt,
@@ -130,7 +131,7 @@ func (a *FileApi) Deletes(c *gin.Context) {
 		return
 	}
 
-	global.Db.Transaction(func(tx *gorm.DB) error {
+	txErr := global.Db.Transaction(func(tx *gorm.DB) error {
 		files := []models.File{}
 
 		if err := tx.Order("created_at desc").Find(&files, "user_id=? AND id in ?", userInfo.ID, req.Ids).Error; err != nil {
@@ -138,15 +139,22 @@ func (a *FileApi) Deletes(c *gin.Context) {
 		}
 
 		for _, v := range files {
-			os.Remove(v.Src)
+			if v.Src != "" {
+				os.Remove(v.Src)
+			}
 		}
 
-		if err := tx.Order("created_at desc").Delete(&files, "user_id=? AND id in ?", userInfo.ID, req.Ids).Error; err != nil {
+		if err := tx.Delete(&models.File{}, "user_id=? AND id in ?", userInfo.ID, req.Ids).Error; err != nil {
 			return err
 		}
 
 		return nil
 	})
+	// 事务失败必须回传错误，之前忽略了返回值，失败也返回成功
+	if txErr != nil {
+		apiReturn.ErrorDatabase(c, txErr.Error())
+		return
+	}
 
 	apiReturn.Success(c)
 
