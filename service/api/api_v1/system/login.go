@@ -7,7 +7,6 @@ import (
 	"sun-panel/api/api_v1/common/base"
 	"sun-panel/global"
 	"sun-panel/lib/cmn"
-	"sun-panel/lib/cmn/systemSetting"
 	"sun-panel/models"
 
 	"github.com/gin-gonic/gin"
@@ -22,7 +21,6 @@ type LoginApi struct {
 type LoginLoginVerify struct {
 	Username string `json:"username" validate:"required"`
 	Password string `json:"password" validate:"required,max=50"`
-	VCode    string `json:"vcode" validate:"max=6"`
 	Email    string `json:"email"`
 }
 
@@ -43,9 +41,6 @@ func (l LoginApi) Login(c *gin.Context) {
 		apiReturn.ErrorParamFomat(c, errMsg)
 		return
 	}
-
-	settings := systemSetting.ApplicationSetting{}
-	global.SystemSetting.GetValueByInterface("system_application", &settings)
 
 	mUser := models.User{}
 	var (

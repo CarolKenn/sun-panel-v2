@@ -33,13 +33,8 @@ type Register struct {
 	OpenRegister bool   `json:"openRegister"` // 开放注册
 }
 
-type Login struct {
-	LoginCaptcha bool `json:"loginCaptcha"` // 登录验证码
-}
-
 type ApplicationSetting struct {
 	Register
-	Login
 	WebSiteUrl string `json:"webSiteUrl"` // 站点地址
 }
 

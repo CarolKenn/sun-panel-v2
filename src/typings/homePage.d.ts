@@ -14,7 +14,6 @@ declare namespace HomePage.quest{
     interface LoginReqest{
         username:string 
         password:string
-        vcode?:string
     }
 
 	interface LoginResponse extends User.Info{

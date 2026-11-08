@@ -23,7 +23,6 @@ const appStore = useAppStore()
 const ms = useMessage()
 const loading = ref(false)
 const languageValue = ref<Language>(appStore.language)
-// const isShowCaptcha = ref<boolean>(false)
 // const isShowRegister = ref<boolean>(false)
 
 const form = ref<Login.LoginReqest>({
@@ -74,7 +73,6 @@ const loginPost = async () => {
     }
     else {
       loading.value = false
-      // captchaRef.value.refresh()
     }
   }
   catch (error) {
@@ -130,12 +128,6 @@ function handleChangeLanuage(value: Language) {
           </NInput>
         </NFormItem>
 
-        <!-- <NFormItem v-if="isShowCaptcha">
-          <div class="w-[120px] h-[34px] mr-[20px] rounded border flex cursor-pointer">
-            <Captcha ref="captchaRef" src="/api/captcha/getImage" />
-          </div>
-          <NInput v-model:value="form.vcode" type="text" placeholder="请输入图像验证码" />
-        </NFormItem> -->
         <NFormItem style="margin-top: 10px">
           <NButton type="primary" block :loading="loading" @click="handleSubmit">
             {{ $t('login.loginButton') }}

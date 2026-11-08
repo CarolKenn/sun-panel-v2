@@ -18,8 +18,7 @@ func (a *Openness) LoginConfig(c *gin.Context) {
 		return
 	}
 	apiReturn.SuccessData(c, gin.H{
-		"loginCaptcha": cfg.LoginCaptcha,
-		"register":     cfg.Register,
+		"register": cfg.Register,
 	})
 }
 
