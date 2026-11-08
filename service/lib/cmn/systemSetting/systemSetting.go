@@ -10,8 +10,6 @@ import (
 )
 
 const (
-	SYSTEM_APPLICATION    = "system_application"
-	SYSTEM_EMAIL          = "system_email"
 	DISCLAIMER            = "disclaimer"            // 免责声明 储存类型：字符串
 	WEB_ABOUT_DESCRIPTION = "web_about_description" // 关于的描述信息
 	PANEL_PUBLIC_USER_ID  = "panel_public_user_id"  // 公开访问模式用户id *uint|null
@@ -19,23 +17,6 @@ const (
 
 type SystemSettingCache struct {
 	Cache cache.Cacher[interface{}]
-}
-
-type Email struct {
-	Host     string `json:"host" binding:"required"`
-	Port     int    `json:"port" binding:"required"`
-	Mail     string `json:"mail" binding:"required,email"`
-	Password string `json:"password" binding:"required"`
-}
-
-type Register struct {
-	EmailSuffix  string `json:"emailSuffix"`  // 注册邮箱后缀
-	OpenRegister bool   `json:"openRegister"` // 开放注册
-}
-
-type ApplicationSetting struct {
-	Register
-	WebSiteUrl string `json:"webSiteUrl"` // 站点地址
 }
 
 var (

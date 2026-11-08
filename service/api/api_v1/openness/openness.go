@@ -11,17 +11,6 @@ import (
 type Openness struct {
 }
 
-func (a *Openness) LoginConfig(c *gin.Context) {
-	cfg := systemSetting.ApplicationSetting{}
-	if err := global.SystemSetting.GetValueByInterface(systemSetting.SYSTEM_APPLICATION, &cfg); err != nil {
-		apiReturn.Error(c, "配置查询失败："+err.Error())
-		return
-	}
-	apiReturn.SuccessData(c, gin.H{
-		"register": cfg.Register,
-	})
-}
-
 func (a *Openness) GetDisclaimer(c *gin.Context) {
 	if content, err := global.SystemSetting.GetValueString(systemSetting.DISCLAIMER); err != nil {
 		global.SystemSetting.Set(systemSetting.DISCLAIMER, "")
