@@ -38,9 +38,9 @@ async function testConnection() {
     return
   }
 
-  // 确保URL包含协议
+  // 确保URL包含协议（原来两个条件都写成了 http://，https 地址会被错误地再拼一层）
   let url = pingUrl.value.trim()
-  if (!url.startsWith('http://') && !url.startsWith('http://')) {
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
     url = 'http://' + url
   }
 
@@ -50,7 +50,9 @@ async function testConnection() {
   try {
     // 创建AbortController用于超时控制
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 100)
+    // 100ms 对浏览器发起一次真实请求来说太短，正常访问也会被中断，
+    // 表现为「明明通着却提示连接失败」，这里放宽到 5 秒
+    const timeoutId = setTimeout(() => controller.abort(), 5000)
 
     // 使用 no-cors 模式避免 CORS 错误
     // 这种模式下无法读取响应内容,但可以判断请求是否成功发出
