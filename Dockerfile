@@ -12,13 +12,9 @@ WORKDIR /build
 COPY . /build
 
 # 安装依赖
-# 这里用 npm ci（依据 package-lock.json）而不是 pnpm，原因：
-#   1) 仓库里的 pnpm-lock.yaml 是 lockfileVersion 6.0，且缺少 @vicons/ionicons5，
-#      与 package.json 已不同步，pnpm 无法 --frozen-lockfile；
-#   2) `npm install pnpm -g` 装到的是 pnpm 10（只支持 lockfileVersion 9.x），
-#      会忽略旧锁文件重新解析依赖，再因默认拦截依赖的构建脚本报
-#      ERR_PNPM_IGNORED_BUILDS，导致 `pnpm install` 直接失败。
-# package-lock.json 覆盖了全部 40 个依赖且已被 CI 的 `npm ci` 验证通过。
+# 依赖安装统一走 npm ci（依据 package-lock.json）：CI、Dockerfile、build.sh 三处一致。
+# 仓库不再保留 pnpm-lock.yaml——它曾丢失 @vicons/ionicons5 已与 package.json 失同步，
+# 任何人照它跑 --frozen-lockfile 都会直接失败。
 RUN npm ci --no-audit --no-fund
 
 # 构建项目
