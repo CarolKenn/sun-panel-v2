@@ -68,9 +68,16 @@ jobs:
           go install github.com/elazarl/go-bindata-assetfs/...@latest
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
+      # go-bindata-assetfs 除了生成 assets/bindata.go，还会在 CWD 落一个
+      # 没有 package 声明的 bindata.go（assetfs 辅助片段，项目只用到
+      # assets.Asset），后者会让 go build ./... 直接失败，必须清掉。
+      # 先生成前删掉旧的 assets/bindata.go，避免它被自己再扫一遍。
       - name: Generate embedded assets
         working-directory: service
-        run: go-bindata-assetfs -o=assets/bindata.go -pkg=assets assets/...
+        run: |
+          rm -f assets/bindata.go
+          go-bindata-assetfs -o=assets/bindata.go -pkg=assets assets/...
+          rm -f bindata.go
 
       # 先全量编译所有包，再产出二进制。
       # 只编 main.go 会漏掉「某个文件语法/包名写错但不被 main 引用」的情况

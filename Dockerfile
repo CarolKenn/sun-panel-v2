@@ -40,11 +40,18 @@ COPY ./service .
 
 RUN apk add --no-cache bash curl gcc git musl-dev
 
+# 生成嵌入资源时注意两点：
+# 1. 先删旧的 assets/bindata.go，否则它会被自己再扫一遍，包体积逐次递增
+# 2. go-bindata-assetfs 会在 CWD 额外落一个没有 package 声明的 bindata.go
+#    （assetfs 辅助片段，项目只用到 assets.Asset），留在源码树里会让
+#    go build ./... 报 expected 'package', found 'func'
 RUN go env -w GO111MODULE=on \
     && export PATH=$PATH:/go/bin \
     && go install -a -v github.com/go-bindata/go-bindata/...@latest \
     && go install -a -v github.com/elazarl/go-bindata-assetfs/...@latest \
+    && rm -f assets/bindata.go \
     && go-bindata-assetfs -o=assets/bindata.go -pkg=assets assets/... \
+    && rm -f bindata.go \
     && go build -o sun-panel --ldflags="-X sun-panel/global.RUNCODE=release -X sun-panel/global.ISDOCKER=docker" main.go
 
 

@@ -49,6 +49,9 @@ out/
 /dist
 /service/sun-panel
 /service/sun-panel.exe
+# go-bindata-assetfs 在 service 目录下生成的游离辅助文件（无 package 声明，
+# 项目并未使用），构建脚本生成后会删掉，这里兜底防止再次被提交
+/service/bindata.go
 
 # mpeltonen/sbt-idea plugin
 .idea_modules/
