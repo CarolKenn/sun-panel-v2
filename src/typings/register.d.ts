@@ -5,7 +5,6 @@ declare namespace System.Register{
 	    password    ?:string 
 	    vcode     ?:string 
 	    emailVCode ?:string 
-		verification?:Common.VerificationRequest
 		referralCode?:string
     }
 

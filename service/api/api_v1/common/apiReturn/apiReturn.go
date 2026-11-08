@@ -9,11 +9,6 @@ import (
 const ERROR_CODE_SUCCESS = 0 // 错误码 无任何错误
 
 const (
-	// 验证器类
-
-	ERROR_CODE_VERIFICATION_MUST = 1101 // 错误码 验证器类：必须需要验证或者验证数据为空
-	ERROR_CODE_VERIFICATION_FAIL = 1102 // 错误码 验证器类：验证失败，验证错误
-
 	// 数据类
 
 	ERROR_CODE_DATA_DATABASE         = 1200 // 错误码 数据类：数据库报错
@@ -57,24 +52,6 @@ func ListData(ctx *gin.Context, list interface{}, count int64) {
 	}
 	ApiReturn(ctx, 0, "OK", data)
 }
-
-// 返回错误 验证码相关错误错误
-// func ErrorVerification(ctx *gin.Context, errCode int, codeID string) {
-// 	msg := ""
-// 	switch errCode {
-// 	case ERROR_CODE_VERIFICATION_FAIL:
-// 		msg = "验证失败，请重新验证"
-// 	case ERROR_CODE_VERIFICATION_MUST:
-// 		msg = "需要进一步验证"
-// 	}
-// 	ApiReturn(ctx, errCode, msg, gin.H{
-// 		"verification": commonApiStructs.VerificationResponse{
-// 			CodeID:  codeID,
-// 			Result:  false,
-// 			Message: msg,
-// 		},
-// 	})
-// }
 
 // 返回错误 需要个性化定义的错误|带返回数据的错误
 func ErrorCode(ctx *gin.Context, code int, errMsg string, data interface{}) {
