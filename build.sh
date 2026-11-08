@@ -6,8 +6,8 @@ REPO=$(
 )
 COMMIT_SHA=$(git rev-parse --short HEAD)
 # VERSION=$(git describe --tags)
-VERSION="v${cut -d '|' -f 2 ./service/assets/version}"
-LATEST_TAG=$(git describe --tags --abbrev=0)
+VERSION="v$(cut -d '|' -f 2 ./service/assets/version | tr -d '[:space:]')"
+LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
 FRONTEND="false"
 BINARY="false"
 RELEASE="false"
@@ -25,9 +25,9 @@ debugInfo() {
 buildFrontend() {
   cd $REPO
   pwd
-#   npm install pnpm -g
-  pnpm install
-  pnpm run build
+  # 仓库统一用 npm（package-lock.json 是唯一权威锁文件）
+  npm ci --no-audit --no-fund
+  npm run build
 }
 
 buildBackEndAssets() {

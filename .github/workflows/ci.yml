@@ -1,0 +1,80 @@
+name: ci
+
+# 之前仓库只有手动触发的发布流程，日常改动（push / PR）完全没有校验。
+# 这个工作流负责「代码还能不能编译」，不做发布。
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: Frontend (lint / type-check / build)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22.10.0
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.10.0'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      # 存量代码还有大量 @antfu 规则告警，先不阻塞合并；
+      # 等清理干净后把 continue-on-error 去掉即可
+      - name: Lint
+        continue-on-error: true
+        run: npm run lint
+
+      - name: Type check
+        run: npm run type-check
+
+      - name: Build
+        run: npm run build
+
+  service:
+    name: Backend (go build)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go 1.21
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache-dependency-path: service/go.sum
+
+      # 与 Dockerfile 中后端构建步骤保持一致
+      - name: Install go-bindata tools
+        run: |
+          go install github.com/go-bindata/go-bindata/...@latest
+          go install github.com/elazarl/go-bindata-assetfs/...@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Generate embedded assets
+        working-directory: service
+        run: go-bindata-assetfs -o=assets/bindata.go -pkg=assets assets/...
+
+      - name: Build
+        working-directory: service
+        env:
+          CGO_ENABLED: '1'
+          GOFLAGS: '-buildvcs=false'
+        run: go build -o sun-panel --ldflags="-X sun-panel/global.RUNCODE=release" main.go

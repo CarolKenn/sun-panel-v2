@@ -33,6 +33,23 @@ cmake-build-*/
 # IntelliJ
 out/
 
+# ===== 运行时产物，绝对不要提交 =====
+# 运行日志（曾经提交过一个 34MB 的 running.log）
+/service/runtime/
+*.log
+# sqlite 数据库（含用户口令哈希与登录 token）
+/service/database/*.db
+/service/database/*.db-shm
+/service/database/*.db-wal
+# 实际生效的配置（由 conf.example.ini 生成）
+/service/conf/conf.ini
+# 上传的附件
+/uploads/
+# 构建产物
+/dist
+/service/sun-panel
+/service/sun-panel.exe
+
 # mpeltonen/sbt-idea plugin
 .idea_modules/
 

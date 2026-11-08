@@ -94,8 +94,12 @@ function http<T = any>(
 
   headers.token = authStore.token
   headers.lang = appStore.language
+  // GET 也必须带上 token：后端 LoginInterceptor 只认 `token` 请求头，
+  // 而 axios 拦截器注入的 Authorization 头后端并不解析。
+  // 之前 GET 分支没有透传 headers，导致 /system/backup/info 这类
+  // 登录态 GET 接口一律返回 1000，前端还会被踢回登录页。
   return method === 'GET'
-    ? request.get(url, { params, signal, onDownloadProgress }).then(successHandler, failHandler)
+    ? request.get(url, { params, headers, signal, onDownloadProgress }).then(successHandler, failHandler)
     : request.post(url, params, { headers, signal, onDownloadProgress }).then(successHandler, failHandler)
 }
 
