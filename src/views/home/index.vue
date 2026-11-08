@@ -89,6 +89,8 @@ const settingModalShow = ref(false)
 
 const items = ref<ItemGroup[]>([])
 const filterItems = ref<ItemGroup[]>([])
+// 搜索无结果和「一个分组都没有」要区分开，否则搜索不到时也会弹出新建分组引导
+const isSearching = ref(false)
 
 
 const drawerVisible = ref(false)
@@ -501,8 +503,14 @@ function filterItemsByNetworkMode() {
       }
       return group
     })
-    // 过滤掉没有项目的组
-    filterItems.value = filteredGroups.filter(group => !group.items || group.items.length > 0)
+    // 已登录时保留空分组：新建分组的初始状态就是没有图标，而分组标题栏里的「+」
+    // 是添加图标的唯一入口。若把空分组过滤掉，用户建完分组就再也看不到它、
+    // 也点不到「+」，等于永远无法添加第一个图标。游客视图才需要藏空分组。
+    if (authStore.visitMode === VisitMode.VISIT_MODE_LOGIN) {
+      filterItems.value = filteredGroups
+    } else {
+      filterItems.value = filteredGroups.filter(group => !group.items || group.items.length > 0)
+    }
   } else {
     // 私密模式下显示所有项目
     filterItems.value = items.value
@@ -803,6 +811,7 @@ onBeforeRouteUpdate(() => {
 function itemFrontEndSearch(keyword?: string) {
   keyword = keyword?.trim()
   if (keyword !== '' && panelState.panelConfig.searchBoxSearchIcon) {
+    isSearching.value = true
     const filteredData = ref<ItemGroup[]>([])
     for (let i = 0; i < items.value.length; i++) {
       const element = items.value[i].items?.filter((item: Panel.ItemInfo) => {
@@ -823,9 +832,18 @@ function itemFrontEndSearch(keyword?: string) {
     filterItems.value = filteredData.value
   }
   else {
+    isSearching.value = false
     // 没有搜索关键词时，应用网络模式过滤
     filterItemsByNetworkMode()
   }
+}
+
+// 空状态引导：登录状态下打开应用启动器建分组，游客则去登录
+function handleEmptyGuideClick() {
+  if (authStore.visitMode === VisitMode.VISIT_MODE_LOGIN)
+    settingModalShow.value = true
+  else
+    router.push('/login')
 }
 
 function handleSetHoverStatus(groupIndex: number, hoverStatus: boolean) {
@@ -1196,6 +1214,23 @@ function handleChangeNetwork(targetMode: PanelStateNetworkModeEnum) {
                 </NButton>
               </div>
             </div>
+          </div>
+
+          <!-- 空状态：一个分组都没有时给出引导。否则首屏只剩时钟和系统状态，
+               用户不知道该去哪里添加网址（分组标题栏的「+」压根不存在） -->
+          <div
+            v-if="!isSearching && items.length === 0"
+            class="mt-[60px] flex flex-col items-center text-center"
+          >
+            <div class="text-white text-lg font-bold text-shadow">
+              {{ t('panelHome.noIconGroup') }}
+            </div>
+            <div class="text-white/60 text-sm mt-[8px] max-w-[420px] leading-6">
+              {{ t('panelHome.noIconGroupTip') }}
+            </div>
+            <NButton class="mt-[16px]" color="#2a2a2a6b" @click="handleEmptyGuideClick">
+              {{ authStore.visitMode === VisitMode.VISIT_MODE_LOGIN ? t('panelHome.goCreateGroup') : t('panelHome.goToLogin') }}
+            </NButton>
           </div>
         </div>
         <div class="mt-5 footer" v-html="panelState.panelConfig.footerHtml" />
