@@ -71,6 +71,7 @@ func (a *UserApi) UpdateInfo(c *gin.Context) {
 	global.UserToken.Delete(userInfo.Token)
 	if err != nil {
 		apiReturn.ErrorDatabase(c, err.Error())
+		return
 	}
 	apiReturn.Success(c)
 }
@@ -130,9 +131,14 @@ func (a *UserApi) GetReferralCode(c *gin.Context) {
 			referralCode := cmn.BuildRandCode(8, cmn.RAND_CODE_MODE2)
 			global.Logger.Debug("referralCode:", referralCode)
 
-			// 查询是否有重复的
-			if row := global.Db.Find(&userInfo, "referral_code=?", referralCode).RowsAffected; row != 0 {
+			// 查询是否有重复的（撞码属于正常情况，重新生成即可，不能复用 userInfo，
+			// 否则会把当前用户信息覆盖成别人的）
+			var exists int64
+			if err := global.Db.Model(&models.User{}).Where("referral_code=?", referralCode).Count(&exists).Error; err != nil {
 				apiReturn.ErrorDatabase(c, err.Error())
+				return
+			}
+			if exists != 0 {
 				continue
 			}
 

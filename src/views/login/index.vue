@@ -9,14 +9,20 @@ import { t } from '@/locales'
 import { languageOptions } from '@/utils/defaultData'
 import type { Language } from '@/store/modules/app/helper'
 import { ss } from '@/utils/storage'
-import {getList as getGroupList} from "@/api/panel/itemIconGroup";
+import {
+  CACHE_KEY_BOOKMARKS_TREE,
+  CACHE_KEY_GROUP_LIST,
+  CACHE_KEY_ITEM_ICON_LIST_PREFIX,
+  CACHE_KEY_USER_AUTH_INFO,
+  CACHE_KEY_USER_CONFIG,
+} from '@/utils/cacheKey'
+import { getList as getGroupList } from '@/api/panel/itemIconGroup'
 // const userStore = useUserStore()
 const authStore = useAuthStore()
 const appStore = useAppStore()
 const ms = useMessage()
 const loading = ref(false)
 const languageValue = ref<Language>(appStore.language)
-const GROUP_LIST_CACHE_KEY = 'groupListCache'
 // const isShowCaptcha = ref<boolean>(false)
 // const isShowRegister = ref<boolean>(false)
 
@@ -31,16 +37,16 @@ const loginPost = async () => {
     const res = await login<Login.LoginResponse>(form.value)
     if (res.code === 0) {
       // 清除所有相关缓存，确保使用新的登录状态数据
-      ss.remove('USER_AUTH_INFO_CACHE')
-      ss.remove('USER_CONFIG_CACHE')
-      ss.remove('GROUP_LIST_CACHE_KEY')
-      ss.remove('bookmarksTreeCache')
+      ss.remove(CACHE_KEY_USER_AUTH_INFO)
+      ss.remove(CACHE_KEY_USER_CONFIG)
+      ss.remove(CACHE_KEY_GROUP_LIST)
+      ss.remove(CACHE_KEY_BOOKMARKS_TREE)
 
       // 清除所有localStorage中的相关缓存键
       // 对于以特定前缀开头的键，我们需要使用localStorage API直接访问
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i)
-        if (key && (key.startsWith('moduleConfig_') || key.startsWith('ITEM_ICON_LIST_CACHE_'))) {
+        if (key && (key.startsWith('moduleConfig_') || key.startsWith(CACHE_KEY_ITEM_ICON_LIST_PREFIX))) {
           ss.remove(key)
         }
       }
@@ -48,14 +54,17 @@ const loginPost = async () => {
       authStore.setToken(res.data.token)
       authStore.setUserInfo(res.data)
 
-			// 获取分组列表数据
-			const groupListRes = await getGroupList() as any
-			if (groupListRes.code === 0 && groupListRes.data) {
-				// 保存分组列表到缓存
-				ss.set(GROUP_LIST_CACHE_KEY, groupListRes.data.list || [])
-			}
-
-
+      // 获取分组列表数据并预写入缓存。
+      // 注意：这一步失败只是少了缓存，不能让用户卡在登录页，
+      // 所以单独 try/catch，且不 rethrow。
+      try {
+        const groupListRes = await getGroupList() as any
+        if (groupListRes.code === 0 && groupListRes.data)
+          ss.set(CACHE_KEY_GROUP_LIST, groupListRes.data.list || [])
+      }
+      catch (err) {
+        console.log('预取分组列表失败，进入首页后会自动重新拉取', err)
+      }
 
       setTimeout(() => {
         ms.success(`Hi ${res.data.name},${t('login.welcomeMessage')}`)
@@ -70,7 +79,8 @@ const loginPost = async () => {
   }
   catch (error) {
     loading.value = false
-    // 请检查网络或者服务器错误
+    // 网络或服务异常时必须给出提示，否则用户只会看到"点了没反应"
+    ms.error(t('common.networkError'))
     console.log(error)
   }
 }

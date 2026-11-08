@@ -2,6 +2,7 @@ package system
 
 import (
 	"sun-panel/api/api_v1/common/apiReturn"
+	"sun-panel/global"
 	"sun-panel/models"
 
 	"github.com/gin-gonic/gin"
@@ -23,9 +24,11 @@ func (s *SystemSettingApi) Set(c *gin.Context) {
 	}
 
 	// 遍历设置项并保存
-	systemSetting := models.SystemSetting{}
+	// 必须走 global.SystemSetting（带缓存的封装），它在写库前会先删除内存缓存；
+	// 直接用 models.SystemSetting 会绕过缓存失效，开放注册/公开访问这类开关
+	// 最长要等缓存 TTL（5 小时）才生效
 	for configName, configValue := range req.Settings {
-		if err := systemSetting.Set(configName, configValue); err != nil {
+		if err := global.SystemSetting.Set(configName, configValue); err != nil {
 			apiReturn.Error(c, "保存配置失败: "+err.Error())
 			return
 		}

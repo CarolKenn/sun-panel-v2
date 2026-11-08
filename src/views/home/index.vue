@@ -104,11 +104,12 @@ import { ss } from '@/utils/storage/local'
 
 // 书签数据树
 const treeData = ref<any[]>([])
-// 缓存键名
-const BOOKMARKS_CACHE_KEY = 'bookmarksTreeCache'
-const GROUP_LIST_CACHE_KEY = 'groupListCache'
-// 图标列表缓存键前缀
-const ITEM_ICON_LIST_CACHE_KEY_PREFIX = 'itemIconList_'
+// 缓存键名（统一来自 utils/cacheKey，避免各处手写字符串写错）
+import {
+  CACHE_KEY_BOOKMARKS_TREE as BOOKMARKS_CACHE_KEY,
+  CACHE_KEY_GROUP_LIST as GROUP_LIST_CACHE_KEY,
+  CACHE_KEY_ITEM_ICON_LIST_PREFIX as ITEM_ICON_LIST_CACHE_KEY_PREFIX,
+} from '@/utils/cacheKey'
 
 // 获取书签数据并转换为前端需要的格式
 async function loadBookmarkTree(forceRefresh = false) {

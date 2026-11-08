@@ -7,6 +7,7 @@ import { deletes, edit, getList, saveSort } from '@/api/panel/itemIconGroup'
 import { RoundCardModal, SvgIcon } from '@/components/common'
 import { t } from '@/locales'
 import { ss } from '@/utils/storage/local'
+import { CACHE_KEY_GROUP_LIST } from '@/utils/cacheKey'
 
 interface EditModalArg {
   show: boolean
@@ -46,7 +47,7 @@ const groups = ref<Panel.ItemIconGroup[]>([])
 function handleAddGroup() {
   editModalArg.value.show = !editModalArg.value.show
   // Clear group list cache
-  ss.remove('GROUP_LIST_CACHE')
+  ss.remove(CACHE_KEY_GROUP_LIST)
 }
 
 function handleEditGroup(groupInfo: Panel.ItemIconGroup) {
@@ -72,7 +73,7 @@ function handleSaveSort() {
     if (code === 0) {
       ms.success(t('common.saveSuccess'))
       // 清除分组列表缓存
-      ss.remove('GROUP_LIST_CACHE')
+      ss.remove(CACHE_KEY_GROUP_LIST)
       sortStatus.value = false
     }
     else {
@@ -94,7 +95,7 @@ function handleDelete(groupInfo: Panel.ItemIconGroup) {
             ms.error(t('common.deleteFail'))
           else {
             // 清除分组列表缓存
-            ss.remove('GROUP_LIST_CACHE')
+            ss.remove(CACHE_KEY_GROUP_LIST)
             refreshList()
           }
         })
@@ -112,7 +113,7 @@ function handleSaveGroup() {
           ms.error(msg)
         
         // 清除分组列表缓存
-        ss.remove('GROUP_LIST_CACHE')
+        ss.remove(CACHE_KEY_GROUP_LIST)
         refreshList()
         editModalArg.value.show = false
         editModalArg.value.model = { ...defaultMNodal }

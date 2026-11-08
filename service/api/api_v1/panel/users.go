@@ -96,8 +96,12 @@ func (a UsersApi) Deletes(c *gin.Context) {
 			if err := tx.Delete(&models.ModuleConfig{}, "user_id=?", v).Error; err != nil {
 				return err
 			}
-			// 删除用户配置
-			if err := tx.Delete(&models.ModuleConfig{}, "user_id=?", v).Error; err != nil {
+			// 删除用户配置（面板样式、搜索引擎等）
+			if err := tx.Delete(&models.UserConfig{}, "user_id=?", v).Error; err != nil {
+				return err
+			}
+			// 删除书签
+			if err := tx.Delete(&models.Bookmark{}, "user_id=?", v).Error; err != nil {
 				return err
 			}
 			// // 删除文件记录（不删除资源文件）
@@ -106,8 +110,8 @@ func (a UsersApi) Deletes(c *gin.Context) {
 			// }
 		}
 
+		// 注意：事务内不要写响应，否则回滚后还会多写一次响应头
 		if err := tx.Delete(&models.User{}, &param.UserIds).Error; err != nil {
-			apiReturn.ErrorDatabase(c, err.Error())
 			return err
 		}
 
@@ -167,17 +171,18 @@ func (a UsersApi) Update(c *gin.Context) {
 
 	mUser := models.User{}
 
+	// 先取出该用户当前的记录，拿到旧 token —— 改完资料要把旧登录态一起作废
 	userInfo := models.User{}
-	// 验证账号是否存在
-	if user, err := mUser.CheckUsernameExist(param.Username); err != nil {
-		userInfo = user
-		if user.ID != param.ID {
-			apiReturn.ErrorByCode(c, 1006)
-			// apiReturn.Error(c, global.Lang.Get("register.mail_exist"))
-			return
-		}
-	} else {
-		userInfo = user
+	if err := global.Db.First(&userInfo, "id=?", param.ID).Error; err != nil {
+		apiReturn.ErrorDataNotFound(c)
+		return
+	}
+
+	// CheckUsernameExist 在“用户名已被占用”时返回 error，此处只允许占用者是同一用户
+	if existed, err := mUser.CheckUsernameExist(param.Username); err != nil && existed.ID != param.ID {
+		apiReturn.ErrorByCode(c, 1006)
+		// apiReturn.Error(c, global.Lang.Get("register.mail_exist"))
+		return
 	}
 
 	param.Token = "" // 修改资料就重置token
@@ -185,8 +190,8 @@ func (a UsersApi) Update(c *gin.Context) {
 		apiReturn.ErrorDatabase(c, err.Error())
 		return
 	}
-	// global.Logger.Debug("修改资料清空token", userInfo.Token)
-	global.UserToken.Delete(userInfo.Token) // 更新用户信息
+	// 清掉旧 token 的内存缓存，否则对方仍可用旧 token 通过 LoginInterceptor
+	global.UserToken.Delete(userInfo.Token)
 	// 返回token等基本信息
 	apiReturn.SuccessData(c, param)
 }

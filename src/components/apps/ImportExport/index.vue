@@ -8,6 +8,7 @@ import { ConfigVersionLowError, FormatError, exportJson, importJsonString } from
 import { get as getAbout } from '@/api/system/about'
 import { edit as addGroup, getList as getGroupList } from '@/api/panel/itemIconGroup'
 import { ss } from '@/utils/storage/local'
+import { CACHE_KEY_GROUP_LIST } from '@/utils/cacheKey'
 import { addMultiple as addMultipleIcons, getListByGroupId } from '@/api/panel/itemIcon'
 
 import { t } from '@/locales'
@@ -53,7 +54,7 @@ async function importIcons(): Promise<string | null> {
       if (createGroupResponse.code === 0) {
         const groupId = createGroupResponse.data?.id
         // 清除分组列表缓存
-        ss.remove('GROUP_LIST_CACHE')
+        ss.remove(CACHE_KEY_GROUP_LIST)
 
         if (groupId) {
           let addIcons: Panel.ItemInfo[] = []
