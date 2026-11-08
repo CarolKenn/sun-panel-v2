@@ -23,7 +23,6 @@ const appStore = useAppStore()
 const ms = useMessage()
 const loading = ref(false)
 const languageValue = ref<Language>(appStore.language)
-// const isShowRegister = ref<boolean>(false)
 
 const form = ref<Login.LoginReqest>({
   username: '',
@@ -134,17 +133,8 @@ function handleChangeLanuage(value: Language) {
           </NButton>
         </NFormItem>
 
-        <!-- <div class="flex justify-end">
-          <NButton v-if="isShowRegister" quaternary type="info" class="flex" @click="$router.push({ path: '/register' })">
-            注册
-          </NButton>
-          <NButton quaternary type="info" class="flex" @click="$router.push({ path: '/resetPassword' })">
-            忘记密码?
-          </NButton>
-        </div> -->
-
         <div class="flex justify-center text-slate-300">
-          Powered By <a href="https://github.com/75412701/sun-panel-v2" target="_blank" class="ml-[5px] text-slate-500">Sun-Panel</a>
+          Powered By <a href="https://github.com/CarolKenn/sun-panel-v2" target="_blank" class="ml-[5px] text-slate-500">Sun-Panel</a>
         </div>
       </NForm>
     </NCard>
